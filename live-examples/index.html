@@ -99,6 +99,38 @@
           </div>
         </section>
 
+        <section class="card-section manual-entry" aria-label="Manual flashcard editor">
+          <header class="section-heading">
+            <h2>Create or edit flashcards · Crea o edita tarjetas</h2>
+            <p class="section-sub">Add new prompts or revise existing ones without leaving the page.</p>
+          </header>
+          <div class="manual-editor">
+            <label class="set-label" for="manual-card-select">Existing flashcards · Tarjetas existentes</label>
+            <select id="manual-card-select" aria-label="Select flashcard to edit">
+              <option value="">Select a card to edit · Selecciona una tarjeta</option>
+            </select>
+            <div class="manual-fields">
+              <label class="set-label" for="manual-question-input">Question · Pregunta</label>
+              <textarea
+                id="manual-question-input"
+                rows="3"
+                placeholder="Describe the prompt · Describe la pregunta"
+              ></textarea>
+              <label class="set-label" for="manual-answer-input">Answer · Respuesta</label>
+              <textarea
+                id="manual-answer-input"
+                rows="3"
+                placeholder="Type the answer · Escribe la respuesta"
+              ></textarea>
+            </div>
+            <div class="manual-buttons">
+              <button id="add-flashcard-button" type="button" class="primary-button">Add flashcard · Agregar tarjeta</button>
+              <button id="update-flashcard-button" type="button" class="secondary-button">Update selected · Actualizar seleccionada</button>
+            </div>
+            <p class="helper-text">Leave the selector empty to create a new flashcard. Select one to edit and save your changes.</p>
+          </div>
+        </section>
+
         <section class="card-section question" role="button" tabindex="0" aria-label="Study question">
           <header class="card-meta">
             <span class="pill accent">Prompt · Pregunta</span>
