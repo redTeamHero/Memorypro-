@@ -1,27 +1,99 @@
 ;(function(exports) {
+  var cachedStorage = null;
+  var storageEvaluated = false;
+
+  function safeLocalStorage() {
+    if (storageEvaluated) {
+      return cachedStorage;
+    }
+
+    storageEvaluated = true;
+
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return null;
+    }
+
+    try {
+      // Accessing localStorage can throw in some environments (privacy mode, etc.).
+      var testKey = '__ouicards__';
+      window.localStorage.setItem(testKey, '1');
+      window.localStorage.removeItem(testKey);
+      cachedStorage = window.localStorage;
+      return cachedStorage;
+    } catch (error) {
+      console.warn('LocalStorage is unavailable.', error);
+      cachedStorage = null;
+      return null;
+    }
+  }
+
+  function getInputValue(selector) {
+    if (typeof window !== 'undefined' && window.jQuery) {
+      return window.jQuery(selector).val();
+    }
+
+    if (typeof document === 'undefined') {
+      return '';
+    }
+
+    var element = typeof selector === 'string' ? document.querySelector(selector) : selector;
+
+    if (!element) {
+      console.warn('Could not find an input matching selector:', selector);
+      return '';
+    }
+
+    return element.value || '';
+  }
+
   function loadFromArray(array) {
     ouicards.flashcards = array;
     resetBuckets();
   }
 
   function loadFromBrowser(selector, delimiter) {
-    var flashcards = [],
-        userInput  = $(selector).val().split('\n');
+    var rawValue = getInputValue(selector);
 
-    // Get rid of empty questions
-    userInput = userInput.filter(function(card) {
-       return card !== "";
-     });
+    if (typeof rawValue !== 'string') {
+      return;
+    }
+
+    var userInput = rawValue
+      .split(/\r?\n/)
+      .map(function(card) {
+        return card.trim();
+      })
+      .filter(function(card) {
+        return card !== '';
+      });
 
     if (userInput.length === 0) {
       console.log('There are no flashcards to upload.');
       return;
     }
 
+    var flashcards = [];
+
     userInput.forEach(function(card) {
       var parsedCard = card.split(delimiter);
-      flashcards.push({question: parsedCard[0], answer: parsedCard[1]});
+
+      if (parsedCard.length < 2) {
+        return;
+      }
+
+      var question = parsedCard.shift();
+      var answer = parsedCard.join(delimiter);
+
+      flashcards.push({
+        question: (question || '').trim(),
+        answer: (answer || '').trim(),
+      });
     });
+
+    if (flashcards.length === 0) {
+      console.log('There are no flashcards to upload.');
+      return;
+    }
 
     ouicards.flashcards = flashcards;
     resetBuckets();
@@ -112,17 +184,35 @@
   }
 
   function saveToLS() {
-    localStorage.flashcards = JSON.stringify(ouicards.flashcards);
-    localStorage.bucketA    = JSON.stringify(ouicards.bucketA);
-    localStorage.bucketB    = JSON.stringify(ouicards.bucketB);
-    localStorage.bucketC    = JSON.stringify(ouicards.bucketC);
+    var storage = safeLocalStorage();
+
+    if (!storage) {
+      return;
+    }
+
+    storage.flashcards = JSON.stringify(ouicards.flashcards);
+    storage.bucketA    = JSON.stringify(ouicards.bucketA);
+    storage.bucketB    = JSON.stringify(ouicards.bucketB);
+    storage.bucketC    = JSON.stringify(ouicards.bucketC);
   }
 
   function getFromLS() {
-    ouicards.flashcards    = JSON.parse(localStorage.flashcards || '[]');
-    ouicards.bucketA       = JSON.parse(localStorage.bucketA    || '[]');
-    ouicards.bucketB       = JSON.parse(localStorage.bucketB    || '[]');
-    ouicards.bucketC       = JSON.parse(localStorage.bucketC    || '[]');
+    var storage = safeLocalStorage();
+
+    if (!storage) {
+      ouicards.flashcards    = [];
+      ouicards.bucketA       = [];
+      ouicards.bucketB       = [];
+      ouicards.bucketC       = [];
+      ouicards.currentBucket = [];
+      ouicards.counter       = 1;
+      return { flashcards: [], bucketA: [], bucketB: [], bucketC: [] };
+    }
+
+    ouicards.flashcards    = JSON.parse(storage.flashcards || '[]');
+    ouicards.bucketA       = JSON.parse(storage.bucketA    || '[]');
+    ouicards.bucketB       = JSON.parse(storage.bucketB    || '[]');
+    ouicards.bucketC       = JSON.parse(storage.bucketC    || '[]');
     ouicards.currentBucket = ouicards.bucketA.length ? ouicards.bucketA :
                          ouicards.bucketB.length ? ouicards.bucketB :
                          ouicards.bucketC.length ? ouicards.bucketC : [];
@@ -161,41 +251,47 @@
   };
 
 // jQuery magic
-  var showNext = function() {
-    var result = next();
-    $('#current-question').first().html(result['question']);
-    $('#current-answer').first().hide().html(result['answer']);
-  };
+  if (typeof exports.jQuery !== 'undefined') {
+    (function($) {
+      var showNext = function() {
+        var result = next();
+        $('#current-question').first().html(result['question']);
+        $('#current-answer').first().hide().html(result['answer']);
+      };
 
-  $.fn.ouicards = function() {
-    var result = [];
-    this.find('ul').hide().children().each(function() {
-      result.push({
-        question: $(this).find('.question').text(),
-        answer: $(this).find('.answer').text()
-      });
-    });
-    
-    loadFromArray(result);
+      $.fn.ouicards = function() {
+        var result = [];
+        this.find('ul').hide().children().each(function() {
+          result.push({
+            question: $(this).find('.question').text(),
+            answer: $(this).find('.answer').text()
+          });
+        });
 
-    $('a#correct').click(function(event) {
-      event.preventDefault();
-      correct();
-      showNext();
-    });
+        loadFromArray(result);
 
-    $('a#wrong').click(function(event) {
-      event.preventDefault();
-      wrong();
-      showNext();
-    });
+        $('a#correct').click(function(event) {
+          event.preventDefault();
+          correct();
+          showNext();
+        });
 
-    $('a#show-answer').click(function(event){
-      event.preventDefault();
-      $('#current-answer').first().show();
-    });
+        $('a#wrong').click(function(event) {
+          event.preventDefault();
+          wrong();
+          showNext();
+        });
 
-    showNext();
-  };
+        $('a#show-answer').click(function(event){
+          event.preventDefault();
+          $('#current-answer').first().show();
+        });
+
+        showNext();
+      };
+    })(exports.jQuery);
+  } else {
+    console.info('jQuery was not detected; skipping $.fn.ouicards helper.');
+  }
 
 })(this);
