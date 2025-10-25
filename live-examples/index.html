@@ -22,6 +22,42 @@
       </header>
 
       <div class="flashcard" aria-live="polite">
+        <section class="study-overview">
+          <div class="card-section set-manager">
+            <header class="section-heading">
+              <h2>Organize your study sets · Organiza tus conjuntos</h2>
+              <p class="section-sub">Group decks by class or topic so you can return to them anytime.</p>
+            </header>
+            <div class="set-fields">
+              <label class="set-label" for="flashcard-set-select">Active set · Conjunto activo</label>
+              <select id="flashcard-set-select" aria-label="Choose flashcard set"></select>
+              <div class="new-set-row">
+                <label class="sr-only" for="new-set-name-input">New set name</label>
+                <input
+                  id="new-set-name-input"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="Biology 201 · Chapter 3"
+                />
+                <button id="create-set-button" type="button" class="secondary-button">Create set · Crear conjunto</button>
+              </div>
+            </div>
+            <p class="helper-text">Saving happens automatically after each answer, but you can also save manually below. Los cambios se guardan automáticamente después de cada respuesta.</p>
+          </div>
+
+          <div class="card-section mode-toggle">
+            <header class="section-heading">
+              <h2>Choose a study mode · Elige un modo</h2>
+              <p class="section-sub">Switch between recall practice with flashcards or recognition with multiple choice.</p>
+            </header>
+            <div class="mode-buttons" role="group" aria-label="Study mode">
+              <button type="button" class="mode-button active" data-mode="flashcard">Flashcards</button>
+              <button type="button" class="mode-button" data-mode="multiple-choice">Multiple choice · Opción múltiple</button>
+            </div>
+            <p class="helper-text">College-ready drills designed for long study sessions. Entrena tu memoria con modos flexibles.</p>
+          </div>
+        </section>
+
         <section class="upload card-section">
           <div class="section-heading">
             <h2>Import your deck · Importa tu mazo</h2>
@@ -63,6 +99,17 @@
           </div>
         </section>
 
+        <section class="card-section multiple-choice-section" aria-live="polite" aria-label="Multiple choice practice">
+          <header class="card-meta">
+            <span class="pill">Multiple choice · Opción múltiple</span>
+          </header>
+          <div class="card-content">
+            <p>Select the correct answer from the options below. Selecciona la respuesta correcta.</p>
+          </div>
+          <div id="choice-options" class="choice-options"></div>
+          <p id="choice-feedback" class="choice-feedback" aria-live="assertive"></p>
+        </section>
+
         <section class="controls" aria-label="Mark response accuracy">
           <div class="control-button wrong" role="button" tabindex="0">
             <label class="icon-close" aria-hidden="true"></label>
@@ -72,6 +119,19 @@
             <label class="icon-checkmark" aria-hidden="true"></label>
             <span class="control-text">Got it · ¡Listo!</span>
           </div>
+        </section>
+
+        <section class="card-section json-section" aria-label="Flashcard data preview">
+          <header class="section-heading">
+            <h2>Flashcards JSON · Tarjetas en JSON</h2>
+            <p class="section-sub">Review or copy your set in JSON format for safekeeping.</p>
+          </header>
+          <pre id="json-output" class="json-output" tabindex="0"></pre>
+          <div class="json-actions">
+            <button id="copy-json" type="button" class="secondary-button">Copy JSON · Copiar JSON</button>
+            <button id="save-set-button" type="button" class="secondary-button">Save progress · Guardar progreso</button>
+          </div>
+          <p id="json-status" class="helper-text" aria-live="polite"></p>
         </section>
 
         <footer class="footer">
