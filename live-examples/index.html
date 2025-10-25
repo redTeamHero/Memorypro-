@@ -1,53 +1,89 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <title>Welcome</title>
+    <meta charset="utf-8">
+    <title>OuiCards Coach</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script src="http://ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="http://ajax.googleapis.org/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
     <script src="questions.js"></script>
     <script src="../ouicards.js"></script>
     <link rel="stylesheet" href="example.css">
     <link rel="stylesheet" href="fonts.css">
   </head>
 
-  <body>
-    <div class="flashcard">
-      
-      <div class="upload">
-        <label class="upload-questions-label">Upload Questions</label>
-        <textarea id="questions-input-area" placeholder="Copy/ paste your comma-separated questions here." cols="80" rows="10"></textarea>
-        <label id="load-questions">Load questions</label>
-      </div>
+  <body class="app-body">
+    <main class="app-shell" role="main">
+      <header class="hero">
+        <span class="hero-badge">OuiCards Coach</span>
+        <h1>Build bilingual mastery, one card at a time.</h1>
+        <p>Tap through spaced-repetition drills that feel as friendly as Duolingo.<br><span class="hero-sub">Practica en inglés y español.</span></p>
+      </header>
 
-      <div class="question">
-        <p>Click here to show instructions</p>
-      </div>
-      <div class="answer">
-        <p>Upload your comma-separated questions above. Each question goes on a separate line.</p>
-        <p>To reveal an answer click on the dark-blue question area (like you just did) or click this answer section.</p>
-        <p>Fun fact: This application uses the <a href="http://en.wikipedia.org/wiki/Leitner_system" target="_blank">Leitner System</a>. Enjoy!</p>
-      </div>
-
-      <div class="controls">
-        <div class="correct">
-          <label class="icon-checkmark"></label>
-        </div>
-        <div class="wrong">
-          <label class="icon-close"></label>
-        </div>
-      </div>
-
-      <div class="footer">
-        <div class="stats">
-          <div class="questions-count">0 questions - time to load some!</div>
-          <div class="current-stats">
-            <label class="icon-stats"></label>
-            <label id="stat-details">0 - 0 - 0</label>
+      <div class="flashcard" aria-live="polite">
+        <section class="upload card-section">
+          <div class="section-heading">
+            <h2>Import your deck · Importa tu mazo</h2>
+            <p class="section-sub">Paste “question,answer” pairs or upload a CSV export.</p>
           </div>
-        </div>
-      </div>
+          <div class="upload-actions">
+            <label class="upload-questions-label pill-button" role="button" tabindex="0">
+              <span class="label-icon icon-cloud-upload" aria-hidden="true"></span>
+              <span class="label-text">Paste flashcards · Pega tus tarjetas</span>
+            </label>
+            <textarea
+              id="questions-input-area"
+              placeholder="Question,Answer\n¿Cuál es la capital de Texas?,Austin"
+              cols="80"
+              rows="6"
+            ></textarea>
+            <label id="load-questions" class="primary-button" role="button" tabindex="0">Load deck · Cargar mazo</label>
+            <p class="helper-text">Tip: use commas or tabs. One card per line. Consejo: usa comas o tabulaciones. Una tarjeta por línea.</p>
+          </div>
+        </section>
 
-    </div>
+        <section class="card-section question" role="button" tabindex="0" aria-label="Study question">
+          <header class="card-meta">
+            <span class="pill accent">Prompt · Pregunta</span>
+          </header>
+          <div class="card-content">
+            <p>Tap the card to show instructions. Toca la tarjeta para ver las instrucciones.</p>
+          </div>
+        </section>
+
+        <section class="card-section answer" role="button" tabindex="0" aria-label="Study answer">
+          <header class="card-meta">
+            <span class="pill">Answer · Respuesta</span>
+          </header>
+          <div class="card-content">
+            <p>Upload your comma-separated questions above. Each line becomes a flashcard. Sube tus preguntas separadas por comas arriba. Cada línea se convierte en una tarjeta.</p>
+            <p>Tap anywhere on the question or answer panel to reveal solutions. Presiona la tarjeta para mostrar la respuesta.</p>
+            <p>Fun fact: We use the <a href="http://en.wikipedia.org/wiki/Leitner_system" target="_blank" rel="noopener noreferrer">Leitner System</a> to help your memory.</p>
+          </div>
+        </section>
+
+        <section class="controls" aria-label="Mark response accuracy">
+          <div class="control-button wrong" role="button" tabindex="0">
+            <label class="icon-close" aria-hidden="true"></label>
+            <span class="control-text">Retry · Repite</span>
+          </div>
+          <div class="control-button correct" role="button" tabindex="0">
+            <label class="icon-checkmark" aria-hidden="true"></label>
+            <span class="control-text">Got it · ¡Listo!</span>
+          </div>
+        </section>
+
+        <footer class="footer">
+          <div class="questions-count">0 cards · tarjetas listas</div>
+          <div class="current-stats">
+            <label class="icon-stats" aria-hidden="true"></label>
+            <span id="stat-details">0 · 0 · 0</span>
+          </div>
+        </footer>
+      </div>
+    </main>
     <script src="example.js"></script>
   </body>
 </html>
