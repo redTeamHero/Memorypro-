@@ -18,6 +18,14 @@ var domRefs = {
   wrongButtons: null,
   setSelect: null,
   createSetButton: null,
+  multipleChoiceSection: null,
+  choiceOptions: null,
+  choiceFeedback: null,
+  modeButtons: null,
+  jsonOutput: null,
+  jsonStatus: null,
+  copyJsonButton: null,
+  saveSetButton: null,
 };
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -51,6 +59,14 @@ function cacheDom() {
   domRefs.wrongButtons = document.querySelectorAll('.control-button.wrong');
   domRefs.setSelect = document.getElementById('flashcard-set-select');
   domRefs.createSetButton = document.getElementById('create-set-button');
+  domRefs.multipleChoiceSection = document.querySelector('.multiple-choice-section');
+  domRefs.choiceOptions = document.getElementById('choice-options');
+  domRefs.choiceFeedback = document.getElementById('choice-feedback');
+  domRefs.modeButtons = document.querySelectorAll('.mode-button');
+  domRefs.jsonOutput = document.getElementById('json-output');
+  domRefs.jsonStatus = document.getElementById('json-status');
+  domRefs.copyJsonButton = document.getElementById('copy-json');
+  domRefs.saveSetButton = document.getElementById('save-set-button');
 }
 
 function initializeSets() {
@@ -278,6 +294,21 @@ function bindHandlers() {
   });
 
   attachActivate([domRefs.questionSection, domRefs.answerSection], revealAnswer);
+
+  attachActivate(domRefs.modeButtons, function(event) {
+    var button = event && event.currentTarget ? event.currentTarget : null;
+    var requestedMode = button && button.getAttribute('data-mode') === 'multiple-choice'
+      ? 'multiple-choice'
+      : 'flashcard';
+    setStudyMode(requestedMode);
+  });
+
+  attachActivate(domRefs.copyJsonButton, function() {
+    clearStatusMessage();
+    copyJsonToClipboard();
+  });
+
+  attachActivate(domRefs.saveSetButton, handleSaveSet);
 }
 
 function attachActivate(targets, handler) {
@@ -323,33 +354,67 @@ function presentCurrentCard(advance) {
     return;
   }
 
+  if (pendingAdvanceHandle && typeof window !== 'undefined' && typeof window.clearTimeout === 'function') {
+    window.clearTimeout(pendingAdvanceHandle);
+    pendingAdvanceHandle = null;
+  }
+
   if (typeof advance === 'undefined') {
     advance = true;
   }
 
-  if (!newQuestion) {
-    var activeSetName = typeof ouicards.getActiveSet === 'function' ? ouicards.getActiveSet() : '';
-
-    domRefs.questionContent.innerHTML = '';
-
-    var englishPrompt = document.createElement('p');
-    englishPrompt.textContent = activeSetName
-      ? 'Add flashcards to "' + activeSetName + '" to get started.'
-      : 'Add flashcards to get started.';
-
-    var spanishPrompt = document.createElement('p');
-    spanishPrompt.textContent = activeSetName
-      ? 'Agrega tarjetas a "' + activeSetName + '" para comenzar.'
-      : 'Agrega tarjetas para comenzar.';
-
-    domRefs.questionContent.appendChild(englishPrompt);
-    domRefs.questionContent.appendChild(spanishPrompt);
-
-    domRefs.answerContent.innerHTML = '';
-    sessionStarted = false;
+  if (!Array.isArray(ouicards.flashcards) || ouicards.flashcards.length === 0) {
+    renderEmptyState();
+    updateFooter();
+    updateJsonPreview();
     return;
   }
 
+  var shouldAdvance = advance !== false || !currentCardRecord;
+
+  if (shouldAdvance) {
+    var fragments = ouicards.next();
+
+    if (!fragments) {
+      renderEmptyState();
+      updateFooter();
+      updateJsonPreview();
+      return;
+    }
+
+    var activeCard = ouicards.currentBucket && ouicards.currentBucket[0]
+      ? ouicards.currentBucket[0]
+      : null;
+
+    currentCardRecord = {
+      fragments: fragments,
+      card: activeCard,
+    };
+  }
+
+  var questionFragments = currentCardRecord && currentCardRecord.fragments;
+  var activeRecord = currentCardRecord && currentCardRecord.card;
+
+  if (!questionFragments) {
+    renderEmptyState();
+    updateFooter();
+    updateJsonPreview();
+    return;
+  }
+
+  sessionStarted = true;
+
+  if (studyMode === 'multiple-choice') {
+    renderMultipleChoiceView(questionFragments, activeRecord);
+  } else {
+    renderFlashcardView(questionFragments);
+  }
+
+  updateFooter();
+  updateJsonPreview();
+}
+
+function renderFlashcardView(questionFragments) {
   domRefs.questionContent.innerHTML = '';
   domRefs.questionContent.appendChild(questionFragments.question);
 
@@ -370,6 +435,10 @@ function presentCurrentCard(advance) {
 
   if (domRefs.choiceFeedback) {
     domRefs.choiceFeedback.textContent = '';
+  }
+
+  if (domRefs.multipleChoiceSection) {
+    hideElement(domRefs.multipleChoiceSection);
   }
 }
 
