@@ -112,20 +112,13 @@ body {
   gap: 14px;
 }
 
-.study-overview {
-  display: grid;
-  gap: 16px;
-}
-
-@media (min-width: 768px) {
-  .study-overview {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 .set-manager {
   display: grid;
-  gap: 12px;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid rgba(28, 176, 246, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .set-label {
@@ -133,30 +126,13 @@ body {
   font-size: 0.95rem;
 }
 
-.set-fields {
-  display: grid;
-  gap: 10px;
-}
-
-#flashcard-set-select {
-  width: 100%;
-  border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  padding: 10px 14px;
-  font-family: inherit;
-  font-size: 0.95rem;
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--text-dark);
-  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-
-.new-set-row {
+.set-controls {
   display: flex;
   gap: 10px;
   align-items: center;
 }
 
-#new-set-name-input {
+#flashcard-set-select {
   flex: 1;
   border-radius: 12px;
   border: 1px solid rgba(15, 23, 42, 0.12);
@@ -187,44 +163,6 @@ body {
   transform: translateY(-1px);
   box-shadow: 0 10px 18px rgba(28, 176, 246, 0.18);
   outline: none;
-}
-
-.mode-toggle {
-  display: grid;
-  gap: 12px;
-}
-
-.mode-buttons {
-  display: inline-flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.mode-button {
-  padding: 10px 20px;
-  border-radius: 999px;
-  border: 1px solid rgba(28, 176, 246, 0.35);
-  background: rgba(255, 255, 255, 0.9);
-  color: var(--text-muted);
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-}
-
-.mode-button.active {
-  background: linear-gradient(135deg, var(--blue), #7ecbff);
-  color: #0f172a;
-  box-shadow: 0 12px 20px rgba(28, 176, 246, 0.28);
-}
-
-.mode-button:hover:not(.active) {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 16px rgba(28, 176, 246, 0.18);
-}
-
-.mode-button:focus-visible {
-  outline: 3px solid rgba(28, 176, 246, 0.35);
-  outline-offset: 3px;
 }
 
 .pill-button,

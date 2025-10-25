@@ -65,20 +65,6 @@
     return { flashcards: [], bucketA: [], bucketB: [], bucketC: [] };
   }
 
-  function normalizeCard(card) {
-    if (!card || typeof card !== 'object') {
-      return { question: '', answer: '' };
-    }
-
-    var rawQuestion = card.question;
-    var rawAnswer = card.answer;
-
-    return {
-      question: typeof rawQuestion === 'string' ? rawQuestion : String(rawQuestion || ''),
-      answer: typeof rawAnswer === 'string' ? rawAnswer : String(rawAnswer || ''),
-    };
-  }
-
   function sanitizeSetName(name) {
     if (typeof name !== 'string') {
       return DEFAULT_SET_NAME;
@@ -335,7 +321,7 @@
     payload.activeSet = activeSetName;
     ouicards.activeSet = activeSetName;
     payload.sets[activeSetName] = {
-      flashcards: ouicards.flashcards.map(normalizeCard),
+      flashcards: ouicards.flashcards,
       bucketA: ouicards.bucketA,
       bucketB: ouicards.bucketB,
       bucketC: ouicards.bucketC,
@@ -368,14 +354,12 @@
     loadSetIntoState(payload.sets[activeSetName]);
 
     return {
-      flashcards: ouicards.flashcards.map(normalizeCard),
+      flashcards: ouicards.flashcards,
       bucketA: ouicards.bucketA,
       bucketB: ouicards.bucketB,
       bucketC: ouicards.bucketC,
       activeSet: activeSetName,
-      sets: Object.keys(payload.sets).sort(function(a, b) {
-        return a.localeCompare(b, undefined, { sensitivity: 'base' });
-      }),
+      sets: Object.keys(payload.sets),
     };
   }
 
@@ -412,14 +396,12 @@
     loadSetIntoState(payload.sets[activeSetName]);
 
     return {
-      flashcards: ouicards.flashcards.map(normalizeCard),
+      flashcards: ouicards.flashcards,
       bucketA: ouicards.bucketA,
       bucketB: ouicards.bucketB,
       bucketC: ouicards.bucketC,
       activeSet: activeSetName,
-      sets: Object.keys(payload.sets).sort(function(a, b) {
-        return a.localeCompare(b, undefined, { sensitivity: 'base' });
-      }),
+      sets: Object.keys(payload.sets),
     };
   }
 
@@ -437,55 +419,7 @@
       setNames.push(getActiveSetName(payload));
     }
 
-    return setNames
-      .map(function(name) {
-        return sanitizeSetName(name);
-      })
-      .sort(function(a, b) {
-        return a.localeCompare(b, undefined, { sensitivity: 'base' });
-      });
-  }
-
-  function getSetData(name) {
-    var storage = safeLocalStorage();
-    var payload = readStoragePayload(storage);
-    var sanitized = sanitizeSetName(name || getActiveSetName(payload));
-    var setState = payload.sets[sanitized];
-
-    if (!setState) {
-      return {
-        name: sanitized,
-        flashcards: [],
-        bucketA: [],
-        bucketB: [],
-        bucketC: [],
-      };
-    }
-
-    return {
-      name: sanitized,
-      flashcards: Array.isArray(setState.flashcards)
-        ? setState.flashcards.map(normalizeCard)
-        : [],
-      bucketA: Array.isArray(setState.bucketA) ? setState.bucketA.slice() : [],
-      bucketB: Array.isArray(setState.bucketB) ? setState.bucketB.slice() : [],
-      bucketC: Array.isArray(setState.bucketC) ? setState.bucketC.slice() : [],
-    };
-  }
-
-  function getActiveSetData() {
-    var storage = safeLocalStorage();
-    var payload = readStoragePayload(storage);
-    var active = getActiveSetName(payload);
-    var snapshot = getSetData(active);
-
-    if (storage) {
-      payload.activeSet = snapshot.name;
-      writeStoragePayload(storage, payload);
-    }
-
-    ouicards.activeSet = snapshot.name;
-    return snapshot;
+    return setNames;
   }
 
   function getActiveSet() {
@@ -541,9 +475,7 @@
     useSet:             useSet,
     listSets:           listSets,
     getActiveSet:       getActiveSet,
-    hasStoredFlashcards: hasStoredFlashcards,
-    getSetData:          getSetData,
-    getActiveSetData:    getActiveSetData
+    hasStoredFlashcards: hasStoredFlashcards
   };
 
 // jQuery magic

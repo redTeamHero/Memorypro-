@@ -17,16 +17,7 @@ var domRefs = {
   correctButtons: null,
   wrongButtons: null,
   setSelect: null,
-  newSetInput: null,
   createSetButton: null,
-  saveSetButton: null,
-  copyJsonButton: null,
-  jsonOutput: null,
-  jsonStatus: null,
-  modeButtons: null,
-  multipleChoiceSection: null,
-  choiceOptions: null,
-  choiceFeedback: null,
 };
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -37,8 +28,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function initializeApp() {
   cacheDom();
-  setStudyMode('flashcard', { skipRender: true, force: true });
-  clearStatusMessage();
   initializeSets();
   await ensureDeckLoaded();
   bindHandlers();
@@ -61,24 +50,12 @@ function cacheDom() {
   domRefs.correctButtons = document.querySelectorAll('.control-button.correct');
   domRefs.wrongButtons = document.querySelectorAll('.control-button.wrong');
   domRefs.setSelect = document.getElementById('flashcard-set-select');
-  domRefs.newSetInput = document.getElementById('new-set-name-input');
   domRefs.createSetButton = document.getElementById('create-set-button');
-  domRefs.saveSetButton = document.getElementById('save-set-button');
-  domRefs.copyJsonButton = document.getElementById('copy-json');
-  domRefs.jsonOutput = document.getElementById('json-output');
-  domRefs.jsonStatus = document.getElementById('json-status');
-  domRefs.modeButtons = document.querySelectorAll('.mode-button');
-  domRefs.multipleChoiceSection = document.querySelector('.multiple-choice-section');
-  domRefs.choiceOptions = document.getElementById('choice-options');
-  domRefs.choiceFeedback = document.getElementById('choice-feedback');
 }
 
 function initializeSets() {
   var snapshot = ouicards.getFromLS();
-  var activeSetName = snapshot && typeof snapshot.activeSet === 'string'
-    ? snapshot.activeSet
-    : (typeof ouicards.getActiveSet === 'function' ? ouicards.getActiveSet() : '');
-
+  var activeSetName = snapshot && typeof snapshot.activeSet === 'string' ? snapshot.activeSet : (ouicards.getActiveSet ? ouicards.getActiveSet() : '');
   populateSetOptions(snapshot && Array.isArray(snapshot.sets) ? snapshot.sets : null, activeSetName);
 
   if (domRefs.setSelect) {
@@ -88,44 +65,8 @@ function initializeSets() {
   }
 
   if (domRefs.createSetButton) {
-    attachActivate(domRefs.createSetButton, handleCreateSet);
+    attachActivate(domRefs.createSetButton, createNewSet);
   }
-
-  if (domRefs.newSetInput) {
-    domRefs.newSetInput.addEventListener('keydown', function(event) {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        handleCreateSet();
-      }
-    });
-  }
-
-  if (domRefs.saveSetButton) {
-    attachActivate(domRefs.saveSetButton, handleSaveSet);
-  }
-
-  if (domRefs.copyJsonButton) {
-    attachActivate(domRefs.copyJsonButton, copyJsonToClipboard);
-  }
-
-  if (domRefs.modeButtons) {
-    Array.from(domRefs.modeButtons).forEach(function(button) {
-      button.addEventListener('click', function(event) {
-        var target = event.currentTarget || event.target;
-        if (!target) {
-          return;
-        }
-
-        var mode = target.getAttribute('data-mode');
-
-        if (mode) {
-          setStudyMode(mode);
-        }
-      });
-    });
-  }
-
-  updateJsonPreview();
 }
 
 function populateSetOptions(setList, activeSetName) {
@@ -133,10 +74,10 @@ function populateSetOptions(setList, activeSetName) {
     return;
   }
 
-  var availableSets = Array.isArray(setList) ? setList.slice() : (typeof ouicards.listSets === 'function' ? ouicards.listSets() : []);
+  var availableSets = Array.isArray(setList) ? setList.slice() : ouicards.listSets();
 
   if (!availableSets.length) {
-    availableSets = [typeof ouicards.getActiveSet === 'function' ? ouicards.getActiveSet() : 'Default'];
+    availableSets = [ouicards.getActiveSet ? ouicards.getActiveSet() : 'Default'];
   }
 
   availableSets = availableSets
@@ -153,7 +94,7 @@ function populateSetOptions(setList, activeSetName) {
 
   var resolvedActiveSet = typeof activeSetName === 'string' && activeSetName.trim() !== ''
     ? activeSetName.trim()
-    : (typeof ouicards.getActiveSet === 'function' ? ouicards.getActiveSet() : availableSets[0]);
+    : (ouicards.getActiveSet ? ouicards.getActiveSet() : availableSets[0]);
 
   if (availableSets.indexOf(resolvedActiveSet) === -1) {
     availableSets.push(resolvedActiveSet);
@@ -174,70 +115,56 @@ function populateSetOptions(setList, activeSetName) {
   domRefs.setSelect.value = resolvedActiveSet;
 }
 
-function switchToSet(rawName, options) {
+function switchToSet(rawName) {
   var targetName = typeof rawName === 'string' ? rawName.trim() : '';
 
   if (!targetName) {
-    return null;
+    return;
   }
-
-  if (pendingAdvanceHandle && typeof window !== 'undefined' && typeof window.clearTimeout === 'function') {
-    window.clearTimeout(pendingAdvanceHandle);
-    pendingAdvanceHandle = null;
-  }
-
-  var existingSets = typeof ouicards.listSets === 'function' ? ouicards.listSets() : [];
-  var existedBefore = existingSets.some(function(name) {
-    return typeof name === 'string' && name.toLowerCase() === targetName.toLowerCase();
-  });
 
   var result = ouicards.useSet(targetName);
-
   populateSetOptions(result && Array.isArray(result.sets) ? result.sets : null, result && result.activeSet ? result.activeSet : targetName);
   sessionStarted = false;
-  currentCardRecord = null;
   updateFooter();
   presentCurrentCard();
-  updateJsonPreview();
-
-  if (!options || !options.skipStatus) {
-    var statusMessage = (existedBefore ? 'Switched to existing set "' : 'Created new set "') + (result && result.activeSet ? result.activeSet : targetName) + '".';
-    statusMessage += existedBefore ? ' Cambiaste al conjunto existente.' : ' Conjunto creado.';
-    setStatusMessage(statusMessage, false);
-  }
-
-  return result;
 }
 
-function handleCreateSet() {
-  if (!domRefs.newSetInput) {
+function createNewSet() {
+  if (typeof window === 'undefined' || typeof window.prompt !== 'function') {
     return;
   }
 
-  var proposedName = domRefs.newSetInput.value;
-  var trimmed = typeof proposedName === 'string' ? proposedName.trim() : '';
+  var proposedName = window.prompt('Name your new flashcard set · Nombra tu nuevo conjunto de tarjetas');
+
+  if (typeof proposedName !== 'string') {
+    return;
+  }
+
+  var trimmed = proposedName.trim();
 
   if (trimmed === '') {
-    setStatusMessage('Enter a set name before creating one. Escribe un nombre antes de crear uno.', true);
-    domRefs.newSetInput.focus();
     return;
   }
 
-  var existingSets = typeof ouicards.listSets === 'function' ? ouicards.listSets() : [];
+  var existingSets = ouicards.listSets();
   var duplicate = existingSets.find(function(name) {
     return typeof name === 'string' && name.toLowerCase() === trimmed.toLowerCase();
   });
 
-  var result = switchToSet(trimmed, { skipStatus: true });
-
   if (duplicate) {
-    setStatusMessage('Set already exists. Switched to "' + (result && result.activeSet ? result.activeSet : trimmed) + '". Ese conjunto ya existe.', false);
-  } else {
-    setStatusMessage('Created "' + (result && result.activeSet ? result.activeSet : trimmed) + '" and made it active. Conjunto creado.', false);
+    if (typeof window.alert === 'function') {
+      window.alert('That set already exists. Switching to "' + duplicate + '". Ese conjunto ya existe. Cambiando a "' + duplicate + '".');
+    }
+
+    switchToSet(duplicate);
+    return;
   }
 
-  domRefs.newSetInput.value = '';
-  domRefs.newSetInput.focus();
+  var result = ouicards.useSet(trimmed);
+  populateSetOptions(result && Array.isArray(result.sets) ? result.sets : null, result && result.activeSet ? result.activeSet : trimmed);
+  sessionStarted = false;
+  updateFooter();
+  presentCurrentCard();
 }
 
 async function ensureDeckLoaded() {
@@ -400,54 +327,26 @@ function presentCurrentCard(advance) {
     advance = true;
   }
 
-  if (pendingAdvanceHandle && typeof window !== 'undefined' && typeof window.clearTimeout === 'function') {
-    window.clearTimeout(pendingAdvanceHandle);
-    pendingAdvanceHandle = null;
-  }
+  if (!newQuestion) {
+    var activeSetName = typeof ouicards.getActiveSet === 'function' ? ouicards.getActiveSet() : '';
 
-  if (!Array.isArray(ouicards.flashcards) || ouicards.flashcards.length === 0) {
-    renderEmptyState();
-    updateModeUI();
-    updateJsonPreview();
-    return;
-  }
+    domRefs.questionContent.innerHTML = '';
 
-  if (advance || !currentCardRecord) {
-    var nextQuestion = ouicards.next();
+    var englishPrompt = document.createElement('p');
+    englishPrompt.textContent = activeSetName
+      ? 'Add flashcards to "' + activeSetName + '" to get started.'
+      : 'Add flashcards to get started.';
 
-    if (!nextQuestion) {
-      renderEmptyState();
-      updateModeUI();
-      updateJsonPreview();
-      return;
-    }
+    var spanishPrompt = document.createElement('p');
+    spanishPrompt.textContent = activeSetName
+      ? 'Agrega tarjetas a "' + activeSetName + '" para comenzar.'
+      : 'Agrega tarjetas para comenzar.';
 
-    currentCardRecord = ouicards.currentBucket && ouicards.currentBucket[0] ? ouicards.currentBucket[0] : null;
+    domRefs.questionContent.appendChild(englishPrompt);
+    domRefs.questionContent.appendChild(spanishPrompt);
 
-    if (!currentCardRecord) {
-      renderEmptyState();
-      updateModeUI();
-      updateJsonPreview();
-      return;
-    }
-  }
-
-  var questionFragments = ouicards.buildQuestionHTML(currentCardRecord);
-
-  if (studyMode === 'multiple-choice') {
-    renderMultipleChoiceView(questionFragments, currentCardRecord);
-  } else {
-    renderFlashcardView(questionFragments);
-  }
-
-  sessionStarted = true;
-  updateModeUI();
-  updateJsonPreview();
-}
-
-function renderFlashcardView(questionFragments) {
-  if (!questionFragments) {
-    renderEmptyState();
+    domRefs.answerContent.innerHTML = '';
+    sessionStarted = false;
     return;
   }
 
