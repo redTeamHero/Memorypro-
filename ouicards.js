@@ -167,6 +167,32 @@
     return DEFAULT_SET_NAME;
   }
 
+  function normalizeCard(card) {
+    if (!card || typeof card !== 'object') {
+      return { question: '', answer: '' };
+    }
+
+    var question = '';
+    var answer = '';
+
+    if (typeof card.question === 'string') {
+      question = card.question;
+    } else if (card.question !== null && typeof card.question !== 'undefined') {
+      question = String(card.question);
+    }
+
+    if (typeof card.answer === 'string') {
+      answer = card.answer;
+    } else if (card.answer !== null && typeof card.answer !== 'undefined') {
+      answer = String(card.answer);
+    }
+
+    return {
+      question: question.trim(),
+      answer: answer.trim(),
+    };
+  }
+
   function loadFromArray(array) {
     if (!Array.isArray(array)) {
       ouicards.flashcards = [];
@@ -174,6 +200,74 @@
       ouicards.flashcards = array.map(normalizeCard);
     }
     resetBuckets();
+  }
+
+  function addFlashcard(card) {
+    var normalized = normalizeCard(card);
+
+    if (!normalized.question || !normalized.answer) {
+      return null;
+    }
+
+    if (!Array.isArray(ouicards.flashcards)) {
+      ouicards.flashcards = [];
+    }
+
+    if (!Array.isArray(ouicards.bucketA)) {
+      ouicards.bucketA = [];
+    }
+
+    if (!Array.isArray(ouicards.bucketB)) {
+      ouicards.bucketB = [];
+    }
+
+    if (!Array.isArray(ouicards.bucketC)) {
+      ouicards.bucketC = [];
+    }
+
+    ouicards.flashcards.push(normalized);
+    ouicards.bucketA.push(normalized);
+
+    if (!Array.isArray(ouicards.currentBucket) || !ouicards.currentBucket.length) {
+      ouicards.currentBucket = ouicards.bucketA;
+    }
+
+    if (typeof ouicards.counter !== 'number' || ouicards.counter < 1) {
+      ouicards.counter = 1;
+    }
+
+    saveToLS();
+    return normalized;
+  }
+
+  function updateFlashcard(index, updates) {
+    if (!Array.isArray(ouicards.flashcards)) {
+      return null;
+    }
+
+    var numericIndex = typeof index === 'number' ? index : parseInt(index, 10);
+
+    if (isNaN(numericIndex) || numericIndex < 0 || numericIndex >= ouicards.flashcards.length) {
+      return null;
+    }
+
+    var normalized = normalizeCard(updates);
+
+    if (!normalized.question || !normalized.answer) {
+      return null;
+    }
+
+    var target = ouicards.flashcards[numericIndex];
+
+    if (!target || typeof target !== 'object') {
+      return null;
+    }
+
+    target.question = normalized.question;
+    target.answer = normalized.answer;
+
+    saveToLS();
+    return target;
   }
 
   function loadFromBrowser(selector, delimiter) {
@@ -430,6 +524,13 @@
     return active;
   }
 
+  function getActiveSetData() {
+    return {
+      name: getActiveSet(),
+      flashcards: Array.isArray(ouicards.flashcards) ? ouicards.flashcards : [],
+    };
+  }
+
   function hasStoredFlashcards(name) {
     var storage = safeLocalStorage();
 
@@ -475,7 +576,10 @@
     useSet:             useSet,
     listSets:           listSets,
     getActiveSet:       getActiveSet,
-    hasStoredFlashcards: hasStoredFlashcards
+    hasStoredFlashcards: hasStoredFlashcards,
+    addFlashcard:       addFlashcard,
+    updateFlashcard:    updateFlashcard,
+    getActiveSetData:   getActiveSetData
   };
 
 // jQuery magic

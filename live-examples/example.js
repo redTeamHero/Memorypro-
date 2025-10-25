@@ -29,6 +29,11 @@ var domRefs = {
   saveSetButton: null,
   startSessionButton: null,
   stopSessionButton: null,
+  manualCardSelect: null,
+  manualQuestionInput: null,
+  manualAnswerInput: null,
+  addFlashcardButton: null,
+  updateFlashcardButton: null,
 };
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -41,8 +46,10 @@ async function initializeApp() {
   cacheDom();
   initializeSets();
   await ensureDeckLoaded();
+  initializeManualEditor();
   bindHandlers();
   ouicards.getFromLS();
+  refreshManualEditorOptions();
   updateFooter();
   presentCurrentCard();
   updateSessionControls();
@@ -73,6 +80,11 @@ function cacheDom() {
   domRefs.saveSetButton = document.getElementById('save-set-button');
   domRefs.startSessionButton = document.getElementById('start-session-button');
   domRefs.stopSessionButton = document.getElementById('stop-session-button');
+  domRefs.manualCardSelect = document.getElementById('manual-card-select');
+  domRefs.manualQuestionInput = document.getElementById('manual-question-input');
+  domRefs.manualAnswerInput = document.getElementById('manual-answer-input');
+  domRefs.addFlashcardButton = document.getElementById('add-flashcard-button');
+  domRefs.updateFlashcardButton = document.getElementById('update-flashcard-button');
 }
 
 function initializeSets() {
@@ -89,6 +101,22 @@ function initializeSets() {
   if (domRefs.createSetButton) {
     attachActivate(domRefs.createSetButton, createNewSet);
   }
+}
+
+function initializeManualEditor() {
+  if (domRefs.manualCardSelect) {
+    domRefs.manualCardSelect.addEventListener('change', handleManualCardSelectionChange);
+  }
+
+  [domRefs.manualQuestionInput, domRefs.manualAnswerInput].forEach(function(input) {
+    if (!input) {
+      return;
+    }
+
+    input.addEventListener('input', updateManualEditorButtonState);
+  });
+
+  updateManualEditorButtonState();
 }
 
 function populateSetOptions(setList, activeSetName) {
@@ -137,6 +165,138 @@ function populateSetOptions(setList, activeSetName) {
   domRefs.setSelect.value = resolvedActiveSet;
 }
 
+function refreshManualEditorOptions(options) {
+  if (!domRefs.manualCardSelect) {
+    return;
+  }
+
+  var cards = Array.isArray(ouicards.flashcards) ? ouicards.flashcards : [];
+  var previousSelection = domRefs.manualCardSelect.value || '';
+  var selectIndex = options && typeof options.selectIndex !== 'undefined'
+    ? String(options.selectIndex)
+    : null;
+  var preserveSelection = options && options.preserveSelection;
+  var preserveFields = options && options.preserveFields;
+
+  domRefs.manualCardSelect.innerHTML = '';
+
+  var placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Select a card to edit · Selecciona una tarjeta';
+  domRefs.manualCardSelect.appendChild(placeholder);
+
+  cards.forEach(function(card, index) {
+    var option = document.createElement('option');
+    option.value = String(index);
+    option.textContent = buildCardOptionLabel(card, index);
+    domRefs.manualCardSelect.appendChild(option);
+  });
+
+  var targetValue = selectIndex !== null
+    ? selectIndex
+    : (preserveSelection ? previousSelection : '');
+
+  if (targetValue && cards[Number(targetValue)]) {
+    domRefs.manualCardSelect.value = String(targetValue);
+    populateManualEditorFields(Number(targetValue));
+  } else {
+    domRefs.manualCardSelect.value = '';
+
+    if (!preserveFields) {
+      clearManualEditorFields();
+    }
+  }
+
+  updateManualEditorButtonState();
+}
+
+function handleManualCardSelectionChange(event) {
+  var value = event && event.target ? event.target.value : '';
+
+  if (value === '') {
+    clearManualEditorFields();
+  } else {
+    var index = parseInt(value, 10);
+
+    if (!isNaN(index)) {
+      populateManualEditorFields(index);
+    }
+  }
+
+  updateManualEditorButtonState();
+}
+
+function populateManualEditorFields(index) {
+  if (!domRefs.manualQuestionInput || !domRefs.manualAnswerInput) {
+    return;
+  }
+
+  var cards = Array.isArray(ouicards.flashcards) ? ouicards.flashcards : [];
+  var card = cards[index];
+
+  if (!card) {
+    clearManualEditorFields();
+    return;
+  }
+
+  domRefs.manualQuestionInput.value = normalizeString(card.question).trim();
+  domRefs.manualAnswerInput.value = normalizeString(card.answer).trim();
+}
+
+function clearManualEditorFields() {
+  if (domRefs.manualQuestionInput) {
+    domRefs.manualQuestionInput.value = '';
+  }
+
+  if (domRefs.manualAnswerInput) {
+    domRefs.manualAnswerInput.value = '';
+  }
+}
+
+function buildCardOptionLabel(card, index) {
+  var question = normalizeString(card && card.question ? card.question : '').trim();
+
+  if (!question) {
+    question = 'Untitled card';
+  }
+
+  if (question.length > 60) {
+    question = question.slice(0, 57) + '…';
+  }
+
+  return (index + 1) + '. ' + question;
+}
+
+function getTrimmedManualValue(element) {
+  if (!element) {
+    return '';
+  }
+
+  return normalizeString(element.value).trim();
+}
+
+function setButtonDisabled(button, disabled) {
+  if (!button) {
+    return;
+  }
+
+  var state = !!disabled;
+  button.disabled = state;
+
+  if (button.setAttribute) {
+    button.setAttribute('aria-disabled', state ? 'true' : 'false');
+  }
+}
+
+function updateManualEditorButtonState() {
+  var question = getTrimmedManualValue(domRefs.manualQuestionInput);
+  var answer = getTrimmedManualValue(domRefs.manualAnswerInput);
+  var hasSelection = domRefs.manualCardSelect && domRefs.manualCardSelect.value !== '';
+
+  setButtonDisabled(domRefs.addFlashcardButton, !(question && answer));
+  setButtonDisabled(domRefs.updateFlashcardButton, !(hasSelection && question && answer));
+}
+
 function switchToSet(rawName) {
   var targetName = typeof rawName === 'string' ? rawName.trim() : '';
 
@@ -151,6 +311,7 @@ function switchToSet(rawName) {
   updateFooter();
   presentCurrentCard();
   updateSessionControls();
+  refreshManualEditorOptions();
 }
 
 function createNewSet() {
@@ -191,6 +352,7 @@ function createNewSet() {
   updateFooter();
   presentCurrentCard();
   updateSessionControls();
+  refreshManualEditorOptions();
 }
 
 async function ensureDeckLoaded() {
@@ -281,6 +443,8 @@ function bindHandlers() {
 
     var activeSet = typeof ouicards.getActiveSet === 'function' ? ouicards.getActiveSet() : 'Default';
     setStatusMessage('Loaded cards into "' + (activeSet || 'Default') + '". Tarjetas cargadas.', false);
+    refreshManualEditorOptions();
+    updateManualEditorButtonState();
   });
 
   attachActivate(domRefs.correctButtons, function() {
@@ -327,6 +491,217 @@ function bindHandlers() {
   attachActivate(domRefs.stopSessionButton, function() {
     stopSession();
   });
+  attachActivate(domRefs.addFlashcardButton, handleAddFlashcard);
+  attachActivate(domRefs.updateFlashcardButton, handleUpdateFlashcard);
+}
+
+function handleAddFlashcard() {
+  clearStatusMessage();
+
+  var question = getTrimmedManualValue(domRefs.manualQuestionInput);
+  var answer = getTrimmedManualValue(domRefs.manualAnswerInput);
+
+  if (!question || !answer) {
+    setStatusMessage('Enter both a question and an answer. Ingresa la pregunta y la respuesta.', true);
+    updateManualEditorButtonState();
+    return;
+  }
+
+  if (domRefs.manualQuestionInput) {
+    domRefs.manualQuestionInput.value = question;
+  }
+
+  if (domRefs.manualAnswerInput) {
+    domRefs.manualAnswerInput.value = answer;
+  }
+
+  var result = addCardToDeck({ question: question, answer: answer });
+
+  if (!result) {
+    setStatusMessage('Unable to add the flashcard. Check your inputs. No se pudo agregar la tarjeta.', true);
+    updateManualEditorButtonState();
+    return;
+  }
+
+  refreshManualEditorOptions({ preserveSelection: false });
+  clearManualEditorFields();
+  updateManualEditorButtonState();
+  updateFooter();
+  updateJsonPreview();
+  updateSessionControls();
+  presentCurrentCard(false);
+
+  var activeSet = getActiveSetLabel();
+  setStatusMessage('Added a flashcard to "' + activeSet + '". Tarjeta agregada.', false);
+}
+
+function handleUpdateFlashcard() {
+  clearStatusMessage();
+
+  if (!domRefs.manualCardSelect) {
+    return;
+  }
+
+  var selectedValue = domRefs.manualCardSelect.value;
+
+  if (!selectedValue) {
+    setStatusMessage('Choose a flashcard to update. Elige una tarjeta para actualizar.', true);
+    updateManualEditorButtonState();
+    return;
+  }
+
+  var index = parseInt(selectedValue, 10);
+
+  if (isNaN(index)) {
+    setStatusMessage('Unable to identify the selected flashcard. No se pudo identificar la tarjeta.', true);
+    updateManualEditorButtonState();
+    return;
+  }
+
+  var question = getTrimmedManualValue(domRefs.manualQuestionInput);
+  var answer = getTrimmedManualValue(domRefs.manualAnswerInput);
+
+  if (!question || !answer) {
+    setStatusMessage('Enter both a question and an answer. Ingresa la pregunta y la respuesta.', true);
+    updateManualEditorButtonState();
+    return;
+  }
+
+  if (domRefs.manualQuestionInput) {
+    domRefs.manualQuestionInput.value = question;
+  }
+
+  if (domRefs.manualAnswerInput) {
+    domRefs.manualAnswerInput.value = answer;
+  }
+
+  var updated = updateCardInDeck(index, { question: question, answer: answer });
+
+  if (!updated) {
+    setStatusMessage('Unable to update the flashcard. No se pudo actualizar la tarjeta.', true);
+    updateManualEditorButtonState();
+    return;
+  }
+
+  refreshManualEditorOptions({ selectIndex: index, preserveFields: true });
+  updateManualEditorButtonState();
+  updateFooter();
+  updateJsonPreview();
+  updateSessionControls();
+
+  if (currentCardRecord && currentCardRecord.card === updated) {
+    currentCardRecord.fragments = ouicards.buildQuestionHTML(updated);
+  }
+
+  presentCurrentCard(false);
+
+  var activeSet = getActiveSetLabel();
+  setStatusMessage('Updated ' + summarizeCardText(updated.question, 48) + ' in "' + activeSet + '". Tarjeta actualizada.', false);
+}
+
+function addCardToDeck(card) {
+  if (typeof ouicards.addFlashcard === 'function') {
+    return ouicards.addFlashcard(card);
+  }
+
+  var normalizedQuestion = normalizeString(card && card.question ? card.question : '').trim();
+  var normalizedAnswer = normalizeString(card && card.answer ? card.answer : '').trim();
+
+  if (!normalizedQuestion || !normalizedAnswer) {
+    return null;
+  }
+
+  if (!Array.isArray(ouicards.flashcards)) {
+    ouicards.flashcards = [];
+  }
+
+  if (!Array.isArray(ouicards.bucketA)) {
+    ouicards.bucketA = [];
+  }
+
+  if (!Array.isArray(ouicards.bucketB)) {
+    ouicards.bucketB = [];
+  }
+
+  if (!Array.isArray(ouicards.bucketC)) {
+    ouicards.bucketC = [];
+  }
+
+  var newCard = {
+    question: normalizedQuestion,
+    answer: normalizedAnswer,
+  };
+
+  ouicards.flashcards.push(newCard);
+  ouicards.bucketA.push(newCard);
+  ouicards.currentBucket = ouicards.bucketA;
+
+  if (typeof ouicards.counter !== 'number' || ouicards.counter < 1) {
+    ouicards.counter = 1;
+  }
+
+  if (typeof ouicards.saveToLS === 'function') {
+    ouicards.saveToLS();
+  }
+
+  return newCard;
+}
+
+function updateCardInDeck(index, updates) {
+  if (typeof ouicards.updateFlashcard === 'function') {
+    return ouicards.updateFlashcard(index, updates);
+  }
+
+  if (!Array.isArray(ouicards.flashcards) || index < 0 || index >= ouicards.flashcards.length) {
+    return null;
+  }
+
+  var normalizedQuestion = normalizeString(updates && updates.question ? updates.question : '').trim();
+  var normalizedAnswer = normalizeString(updates && updates.answer ? updates.answer : '').trim();
+
+  if (!normalizedQuestion || !normalizedAnswer) {
+    return null;
+  }
+
+  var target = ouicards.flashcards[index];
+
+  if (!target || typeof target !== 'object') {
+    return null;
+  }
+
+  target.question = normalizedQuestion;
+  target.answer = normalizedAnswer;
+
+  if (typeof ouicards.saveToLS === 'function') {
+    ouicards.saveToLS();
+  }
+
+  return target;
+}
+
+function summarizeCardText(value, limit) {
+  var text = normalizeString(value).trim();
+
+  if (!text) {
+    return '""';
+  }
+
+  var max = typeof limit === 'number' && limit > 3 ? limit : 48;
+
+  if (text.length > max) {
+    text = text.slice(0, max - 1) + '…';
+  }
+
+  return '"' + text + '"';
+}
+
+function getActiveSetLabel() {
+  if (typeof ouicards.getActiveSet === 'function') {
+    var name = ouicards.getActiveSet();
+    return name || 'Default';
+  }
+
+  return 'Default';
 }
 
 function isInteractionDisabled(element) {
