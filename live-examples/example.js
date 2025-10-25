@@ -34,7 +34,7 @@ function bindHandlers() {
     $('#load-questions').fadeOut(80);
     $('#questions-input-area').val('');
     $('.upload-questions-label')
-      .text('Load another deck')
+      .text('Load another deck · Cargar otro mazo')
       .fadeIn(160);
   });
 
@@ -86,7 +86,7 @@ function presentCurrentCard() {
   var newQuestion = ouicards.next();
 
   if (!newQuestion) {
-    $('.question .card-content').html('<p>Add flashcards to get started.</p>');
+    $('.question .card-content').html('<p>Add flashcards to get started. Agrega tarjetas para comenzar.</p>');
     $('.answer .card-content').empty();
     sessionStarted = false;
     return;
@@ -114,7 +114,7 @@ function revealAnswer() {
 
 function updateFooter() {
   var total = ouicards.flashcards.length;
-  var totalLabel = total === 1 ? 'card ready' : 'cards ready';
+  var totalLabel = total === 1 ? 'card · tarjeta lista' : 'cards · tarjetas listas';
   $('.questions-count').html(total + ' ' + totalLabel);
 
   var bucketSummary = 'A:' + ouicards.bucketA.length + ' · ' +
