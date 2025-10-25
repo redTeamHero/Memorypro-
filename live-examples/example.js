@@ -1,4 +1,5 @@
 var sessionStarted = false;
+var sessionActive = false;
 var studyMode = 'flashcard';
 var currentCardRecord = null;
 var pendingAdvanceHandle = null;
@@ -26,6 +27,8 @@ var domRefs = {
   jsonStatus: null,
   copyJsonButton: null,
   saveSetButton: null,
+  startSessionButton: null,
+  stopSessionButton: null,
 };
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -42,6 +45,7 @@ async function initializeApp() {
   ouicards.getFromLS();
   updateFooter();
   presentCurrentCard();
+  updateSessionControls();
 }
 
 function cacheDom() {
@@ -67,6 +71,8 @@ function cacheDom() {
   domRefs.jsonStatus = document.getElementById('json-status');
   domRefs.copyJsonButton = document.getElementById('copy-json');
   domRefs.saveSetButton = document.getElementById('save-set-button');
+  domRefs.startSessionButton = document.getElementById('start-session-button');
+  domRefs.stopSessionButton = document.getElementById('stop-session-button');
 }
 
 function initializeSets() {
@@ -138,11 +144,13 @@ function switchToSet(rawName) {
     return;
   }
 
+  stopSession({ skipRender: true });
   var result = ouicards.useSet(targetName);
   populateSetOptions(result && Array.isArray(result.sets) ? result.sets : null, result && result.activeSet ? result.activeSet : targetName);
   sessionStarted = false;
   updateFooter();
   presentCurrentCard();
+  updateSessionControls();
 }
 
 function createNewSet() {
@@ -176,11 +184,13 @@ function createNewSet() {
     return;
   }
 
+  stopSession({ skipRender: true });
   var result = ouicards.useSet(trimmed);
   populateSetOptions(result && Array.isArray(result.sets) ? result.sets : null, result && result.activeSet ? result.activeSet : trimmed);
   sessionStarted = false;
   updateFooter();
   presentCurrentCard();
+  updateSessionControls();
 }
 
 async function ensureDeckLoaded() {
@@ -251,9 +261,11 @@ function bindHandlers() {
       return;
     }
 
+    stopSession({ skipRender: true });
     ouicards.getFromLS();
     updateFooter();
     presentCurrentCard();
+    updateSessionControls();
 
     hideElement(domRefs.questionsInput);
     hideElement(domRefs.loadButton);
@@ -309,6 +321,37 @@ function bindHandlers() {
   });
 
   attachActivate(domRefs.saveSetButton, handleSaveSet);
+  attachActivate(domRefs.startSessionButton, function() {
+    startSession();
+  });
+  attachActivate(domRefs.stopSessionButton, function() {
+    stopSession();
+  });
+}
+
+function isInteractionDisabled(element) {
+  if (!element) {
+    return true;
+  }
+
+  if (typeof element.disabled !== 'undefined' && element.disabled) {
+    return true;
+  }
+
+  if (element.getAttribute) {
+    var ariaDisabled = element.getAttribute('aria-disabled');
+    var dataDisabled = element.getAttribute('data-disabled');
+
+    if (ariaDisabled === 'true' || dataDisabled === 'true') {
+      return true;
+    }
+  }
+
+  if (element.classList && element.classList.contains('is-disabled')) {
+    return true;
+  }
+
+  return false;
 }
 
 function attachActivate(targets, handler) {
@@ -336,17 +379,179 @@ function attachActivate(targets, handler) {
         return;
       }
 
+      if (isInteractionDisabled(element)) {
+        return;
+      }
+
       event.preventDefault();
       handler(event);
     });
 
     element.addEventListener('keydown', function(event) {
       if (event.key === 'Enter' || event.key === ' ') {
+        if (isInteractionDisabled(element)) {
+          return;
+        }
+
         event.preventDefault();
         handler(event);
       }
     });
   });
+}
+
+function hasActiveDeck() {
+  return Array.isArray(ouicards.flashcards) && ouicards.flashcards.length > 0;
+}
+
+function updateSessionControls() {
+  var deckReady = hasActiveDeck();
+
+  if (domRefs.startSessionButton) {
+    var startDisabled = !deckReady || sessionActive;
+    domRefs.startSessionButton.disabled = startDisabled;
+    domRefs.startSessionButton.setAttribute('aria-disabled', startDisabled ? 'true' : 'false');
+  }
+
+  if (domRefs.stopSessionButton) {
+    var stopDisabled = !sessionActive;
+    domRefs.stopSessionButton.disabled = stopDisabled;
+    domRefs.stopSessionButton.setAttribute('aria-disabled', stopDisabled ? 'true' : 'false');
+  }
+}
+
+function startSession() {
+  if (sessionActive) {
+    return;
+  }
+
+  if (!hasActiveDeck()) {
+    setStatusMessage('Load cards before starting a session. Carga tarjetas antes de iniciar.', true);
+    return;
+  }
+
+  clearStatusMessage();
+
+  if (pendingAdvanceHandle && typeof window !== 'undefined' && typeof window.clearTimeout === 'function') {
+    window.clearTimeout(pendingAdvanceHandle);
+    pendingAdvanceHandle = null;
+  }
+
+  sessionActive = true;
+  sessionStarted = false;
+  updateSessionControls();
+  presentCurrentCard(true);
+}
+
+function stopSession(options) {
+  var config = {};
+
+  if (options && typeof options === 'object' && !Array.isArray(options)) {
+    if (!(typeof options.type === 'string' && typeof options.preventDefault === 'function')) {
+      config = options;
+    }
+  }
+
+  if (pendingAdvanceHandle && typeof window !== 'undefined' && typeof window.clearTimeout === 'function') {
+    window.clearTimeout(pendingAdvanceHandle);
+    pendingAdvanceHandle = null;
+  }
+
+  sessionActive = false;
+  sessionStarted = false;
+  currentCardRecord = null;
+
+  setControlsDisabled(true);
+  updateSessionControls();
+
+  if (!config.skipRender) {
+    presentCurrentCard(false);
+  }
+}
+
+function setControlsDisabled(disabled) {
+  if (domRefs.controlsSection) {
+    domRefs.controlsSection.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+  }
+
+  function toggle(element) {
+    if (!element) {
+      return;
+    }
+
+    if (typeof element.disabled !== 'undefined') {
+      element.disabled = !!disabled;
+    }
+
+    if (element.classList) {
+      element.classList.toggle('is-disabled', !!disabled);
+    }
+
+    if (element.setAttribute) {
+      element.setAttribute('data-disabled', disabled ? 'true' : 'false');
+      element.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+
+      if (element.tagName && element.tagName.toLowerCase() !== 'button') {
+        element.setAttribute('tabindex', disabled ? '-1' : '0');
+      }
+    }
+  }
+
+  if (domRefs.correctButtons) {
+    Array.from(domRefs.correctButtons).forEach(toggle);
+  }
+
+  if (domRefs.wrongButtons) {
+    Array.from(domRefs.wrongButtons).forEach(toggle);
+  }
+}
+
+function renderSessionInactiveState() {
+  if (!domRefs.questionContent || !domRefs.answerContent) {
+    return;
+  }
+
+  domRefs.questionContent.innerHTML = '';
+
+  var primaryMessage = document.createElement('p');
+  primaryMessage.textContent = 'Press "Start session" to begin studying this set.';
+
+  var secondaryMessage = document.createElement('p');
+  secondaryMessage.textContent = 'Presiona "Iniciar sesión" para comenzar con este conjunto.';
+
+  domRefs.questionContent.appendChild(primaryMessage);
+  domRefs.questionContent.appendChild(secondaryMessage);
+
+  domRefs.answerContent.innerHTML = '';
+
+  var answerMessage = document.createElement('p');
+  answerMessage.textContent = 'Answers stay hidden until your session is running. Las respuestas permanecen ocultas hasta que la sesión esté activa.';
+  domRefs.answerContent.appendChild(answerMessage);
+
+  if (domRefs.answerSection) {
+    domRefs.answerSection.classList.remove('revealed');
+  }
+
+  if (domRefs.choiceFeedback) {
+    domRefs.choiceFeedback.textContent = '';
+  }
+
+  if (studyMode === 'multiple-choice') {
+    if (domRefs.choiceOptions) {
+      domRefs.choiceOptions.innerHTML = '';
+      var waitingMessage = document.createElement('p');
+      waitingMessage.textContent = 'Start the session to generate answer choices. Inicia la sesión para ver las opciones.';
+      domRefs.choiceOptions.appendChild(waitingMessage);
+    }
+
+    if (domRefs.multipleChoiceSection) {
+      showElement(domRefs.multipleChoiceSection, 'grid');
+    }
+  } else if (domRefs.multipleChoiceSection) {
+    hideElement(domRefs.multipleChoiceSection);
+  }
+
+  setControlsDisabled(true);
 }
 
 function presentCurrentCard(advance) {
@@ -363,10 +568,26 @@ function presentCurrentCard(advance) {
     advance = true;
   }
 
-  if (!Array.isArray(ouicards.flashcards) || ouicards.flashcards.length === 0) {
+  var deckAvailable = hasActiveDeck();
+
+  if (!deckAvailable) {
+    sessionStarted = false;
+    sessionActive = false;
+    currentCardRecord = null;
     renderEmptyState();
     updateFooter();
     updateJsonPreview();
+    updateSessionControls();
+    return;
+  }
+
+  if (!sessionActive) {
+    sessionStarted = false;
+    currentCardRecord = null;
+    renderSessionInactiveState();
+    updateFooter();
+    updateJsonPreview();
+    updateSessionControls();
     return;
   }
 
@@ -376,9 +597,12 @@ function presentCurrentCard(advance) {
     var fragments = ouicards.next();
 
     if (!fragments) {
+      sessionStarted = false;
+      currentCardRecord = null;
       renderEmptyState();
       updateFooter();
       updateJsonPreview();
+      updateSessionControls();
       return;
     }
 
@@ -396,9 +620,11 @@ function presentCurrentCard(advance) {
   var activeRecord = currentCardRecord && currentCardRecord.card;
 
   if (!questionFragments) {
+    sessionStarted = false;
     renderEmptyState();
     updateFooter();
     updateJsonPreview();
+    updateSessionControls();
     return;
   }
 
@@ -412,6 +638,7 @@ function presentCurrentCard(advance) {
 
   updateFooter();
   updateJsonPreview();
+  updateSessionControls();
 }
 
 function renderFlashcardView(questionFragments) {
@@ -440,6 +667,8 @@ function renderFlashcardView(questionFragments) {
   if (domRefs.multipleChoiceSection) {
     hideElement(domRefs.multipleChoiceSection);
   }
+
+  setControlsDisabled(false);
 }
 
 function renderMultipleChoiceView(questionFragments, card) {
@@ -476,6 +705,7 @@ function renderMultipleChoiceView(questionFragments, card) {
     if (domRefs.multipleChoiceSection) {
       showElement(domRefs.multipleChoiceSection, 'grid');
     }
+    setControlsDisabled(true);
     return;
   }
 
@@ -492,6 +722,8 @@ function renderMultipleChoiceView(questionFragments, card) {
   if (domRefs.multipleChoiceSection) {
     showElement(domRefs.multipleChoiceSection, 'grid');
   }
+
+  setControlsDisabled(false);
 }
 
 function renderEmptyState() {
@@ -536,6 +768,7 @@ function renderEmptyState() {
 
   sessionStarted = false;
   currentCardRecord = null;
+  setControlsDisabled(true);
 }
 
 function buildMultipleChoiceOptions(card) {
@@ -629,6 +862,10 @@ function handleChoiceSelection(event) {
     return;
   }
 
+  if (!sessionActive) {
+    return;
+  }
+
   var button = event.currentTarget;
 
   if (!button || button.disabled) {
@@ -675,7 +912,7 @@ function handleChoiceSelection(event) {
 }
 
 function revealAnswer() {
-  if (!sessionStarted || studyMode !== 'flashcard' || !domRefs.answerSection || !domRefs.answerContent) {
+  if (!sessionActive || !sessionStarted || studyMode !== 'flashcard' || !domRefs.answerSection || !domRefs.answerContent) {
     return;
   }
 
