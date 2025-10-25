@@ -1,15 +1,57 @@
 var sessionStarted = false;
 
 $(document).ready(function() {
-  if (!localStorage.flashcards || localStorage.flashcards === '[]') {
-    ouicards.loadFromArray(myFlashcards);
-  }
+  initializeApp();
+});
+
+async function initializeApp() {
+  await ensureDeckLoaded();
 
   bindHandlers();
   ouicards.getFromLS();
   updateFooter();
   presentCurrentCard();
-});
+}
+
+async function ensureDeckLoaded() {
+  if (localStorage.flashcards && localStorage.flashcards !== '[]') {
+    return;
+  }
+
+  if (typeof fetch !== 'function') {
+    console.warn('Fetch API is unavailable in this browser. Using bundled sample deck.');
+    ouicards.loadFromArray(myFlashcards);
+    return;
+  }
+
+  try {
+    var response = await fetch('/api/decks/default', { headers: { Accept: 'application/json' } });
+
+    if (!response.ok) {
+      throw new Error('Request failed with status ' + response.status);
+    }
+
+    var deck = await response.json();
+
+    if (deck && Array.isArray(deck.flashcards) && deck.flashcards.length > 0) {
+      var normalizedCards = deck.flashcards.map(function(card) {
+        return {
+          question: typeof card.question === 'string' ? card.question : String(card.question || ''),
+          answer: typeof card.answer === 'string' ? card.answer : String(card.answer || ''),
+        };
+      });
+
+      ouicards.loadFromArray(normalizedCards);
+      return;
+    }
+
+    console.warn('Default deck payload did not contain flashcards. Falling back to bundled sample.');
+  } catch (error) {
+    console.warn('Unable to load default deck from API. Using bundled sample deck instead.', error);
+  }
+
+  ouicards.loadFromArray(myFlashcards);
+}
 
 function bindHandlers() {
   attachActivate($('.upload-questions-label'), function() {
