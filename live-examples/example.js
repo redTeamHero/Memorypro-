@@ -1,67 +1,15 @@
 var sessionStarted = false;
-var progressTotals = { correct: 0, wrong: 0 };
 
 $(document).ready(function() {
+  if (!localStorage.flashcards || localStorage.flashcards === '[]') {
+    ouicards.loadFromArray(myFlashcards);
+  }
+
   bindHandlers();
-  initializeDeck();
+  ouicards.getFromLS();
+  updateFooter();
+  presentCurrentCard();
 });
-
-function initializeDeck() {
-  if (localStorage.flashcards && localStorage.flashcards !== '[]') {
-    ouicards.getFromLS();
-    updateFooter();
-    presentCurrentCard();
-    recordProgress('session_resume');
-    return;
-  }
-
-  setLoadingState(true, 'Loading starter deck from Memorypro...');
-
-  fetch('/api/decks/default')
-    .then(function(response) {
-      if (!response.ok) {
-        throw new Error('Unable to load starter deck');
-      }
-      return response.json();
-    })
-    .then(function(deck) {
-      if (!deck || !Array.isArray(deck.flashcards) || deck.flashcards.length === 0) {
-        showEmptyState();
-        return;
-      }
-
-      ouicards.loadFromArray(deck.flashcards);
-      ouicards.getFromLS();
-      updateFooter();
-      presentCurrentCard();
-      recordProgress('session_start');
-    })
-    .catch(function() {
-      showEmptyState();
-    })
-    .finally(function() {
-      setLoadingState(false);
-    });
-}
-
-function setLoadingState(isLoading, message) {
-  var $questionContent = $('.question .card-content');
-  var $answerContent = $('.answer .card-content');
-
-  if (isLoading) {
-    $questionContent.html('<p>' + (message || 'Preparing your flashcards...') + '</p>');
-    $answerContent.html('<p>Please wait while we connect to the Memorypro API.</p>');
-  }
-}
-
-function showEmptyState() {
-  var $questionContent = $('.question .card-content');
-  var $answerContent = $('.answer .card-content');
-
-  $questionContent.html('<p>Add flashcards to get started.</p>');
-  $answerContent.html('<p>We could not load the starter deck. Paste your own CSV or try again.</p>');
-  sessionStarted = false;
-}
 
 function bindHandlers() {
   attachActivate($('.upload-questions-label'), function() {
@@ -81,13 +29,12 @@ function bindHandlers() {
     ouicards.getFromLS();
     updateFooter();
     presentCurrentCard();
-    recordProgress('deck_uploaded');
 
     $('#questions-input-area').slideUp(120);
     $('#load-questions').fadeOut(80);
     $('#questions-input-area').val('');
     $('.upload-questions-label')
-      .text('Load another deck')
+      .text('Load another deck · Cargar otro mazo')
       .fadeIn(160);
   });
 
@@ -98,10 +45,8 @@ function bindHandlers() {
     }
 
     ouicards.correct();
-    progressTotals.correct += 1;
     updateFooter();
     presentCurrentCard();
-    recordProgress('correct');
   });
 
   attachActivate($('.control-button.wrong'), function() {
@@ -111,10 +56,8 @@ function bindHandlers() {
     }
 
     ouicards.wrong();
-    progressTotals.wrong += 1;
     updateFooter();
     presentCurrentCard();
-    recordProgress('wrong');
   });
 
   attachActivate($('.question'), revealAnswer);
@@ -143,7 +86,9 @@ function presentCurrentCard() {
   var newQuestion = ouicards.next();
 
   if (!newQuestion) {
-    showEmptyState();
+    $('.question .card-content').html('<p>Add flashcards to get started. Agrega tarjetas para comenzar.</p>');
+    $('.answer .card-content').empty();
+    sessionStarted = false;
     return;
   }
 
@@ -168,48 +113,12 @@ function revealAnswer() {
 }
 
 function updateFooter() {
-  var total = ouicards.flashcards.length || 0;
-  var totalLabel = total === 1 ? 'card ready' : 'cards ready';
+  var total = ouicards.flashcards.length;
+  var totalLabel = total === 1 ? 'card · tarjeta lista' : 'cards · tarjetas listas';
   $('.questions-count').html(total + ' ' + totalLabel);
 
   var bucketSummary = 'A:' + ouicards.bucketA.length + ' · ' +
                       'B:' + ouicards.bucketB.length + ' · ' +
                       'C:' + ouicards.bucketC.length;
   $('#stat-details').text(bucketSummary);
-}
-
-function recordProgress(eventName) {
-  var payload = {
-    event: eventName,
-    totals: {
-      correct: progressTotals.correct,
-      wrong: progressTotals.wrong,
-      deckSize: ouicards.flashcards.length
-    },
-    bucketSnapshot: {
-      A: ouicards.bucketA.length,
-      B: ouicards.bucketB.length,
-      C: ouicards.bucketC.length
-    }
-  };
-
-  var body = JSON.stringify(payload);
-
-  if (navigator.sendBeacon) {
-    try {
-      var blob = new Blob([body], { type: 'application/json' });
-      navigator.sendBeacon('/api/progress', blob);
-      return;
-    } catch (error) {
-      // Fallback to fetch below
-    }
-  }
-
-  fetch('/api/progress', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: body
-  }).catch(function() {
-    // Swallow network errors; the UI should not break when offline.
-  });
 }
