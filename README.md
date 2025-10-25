@@ -127,7 +127,7 @@ Here's some example code ([also available here](http://carlsednaoui.github.io/ou
 <html>
 <head>
   <title>Welcome</title>
-  <script src="http://ajax.googleapis.org/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
+  <script src="https://ajax.googleapis.org/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
   <script src="../ouicards.js"></script>
   <script>
     $(function() {
