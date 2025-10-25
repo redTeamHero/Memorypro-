@@ -168,7 +168,11 @@
   }
 
   function loadFromArray(array) {
-    ouicards.flashcards = array;
+    if (!Array.isArray(array)) {
+      ouicards.flashcards = [];
+    } else {
+      ouicards.flashcards = array.map(normalizeCard);
+    }
     resetBuckets();
   }
 
