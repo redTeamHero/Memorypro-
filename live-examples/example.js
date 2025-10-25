@@ -11,6 +11,8 @@ var domRefs = {
   statDetails: null,
   correctButtons: null,
   wrongButtons: null,
+  setSelect: null,
+  createSetButton: null,
 };
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -21,6 +23,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function initializeApp() {
   cacheDom();
+  initializeSets();
   await ensureDeckLoaded();
   bindHandlers();
   ouicards.getFromLS();
@@ -40,6 +43,122 @@ function cacheDom() {
   domRefs.statDetails = document.getElementById('stat-details');
   domRefs.correctButtons = document.querySelectorAll('.control-button.correct');
   domRefs.wrongButtons = document.querySelectorAll('.control-button.wrong');
+  domRefs.setSelect = document.getElementById('flashcard-set-select');
+  domRefs.createSetButton = document.getElementById('create-set-button');
+}
+
+function initializeSets() {
+  var snapshot = ouicards.getFromLS();
+  var activeSetName = snapshot && typeof snapshot.activeSet === 'string' ? snapshot.activeSet : (ouicards.getActiveSet ? ouicards.getActiveSet() : '');
+  populateSetOptions(snapshot && Array.isArray(snapshot.sets) ? snapshot.sets : null, activeSetName);
+
+  if (domRefs.setSelect) {
+    domRefs.setSelect.addEventListener('change', function(event) {
+      switchToSet(event.target.value);
+    });
+  }
+
+  if (domRefs.createSetButton) {
+    attachActivate(domRefs.createSetButton, createNewSet);
+  }
+}
+
+function populateSetOptions(setList, activeSetName) {
+  if (!domRefs.setSelect) {
+    return;
+  }
+
+  var availableSets = Array.isArray(setList) ? setList.slice() : ouicards.listSets();
+
+  if (!availableSets.length) {
+    availableSets = [ouicards.getActiveSet ? ouicards.getActiveSet() : 'Default'];
+  }
+
+  availableSets = availableSets
+    .filter(function(name) {
+      return typeof name === 'string' && name.trim() !== '';
+    })
+    .map(function(name) {
+      return name.trim();
+    });
+
+  availableSets.sort(function(a, b) {
+    return a.localeCompare(b, undefined, { sensitivity: 'base' });
+  });
+
+  var resolvedActiveSet = typeof activeSetName === 'string' && activeSetName.trim() !== ''
+    ? activeSetName.trim()
+    : (ouicards.getActiveSet ? ouicards.getActiveSet() : availableSets[0]);
+
+  if (availableSets.indexOf(resolvedActiveSet) === -1) {
+    availableSets.push(resolvedActiveSet);
+    availableSets.sort(function(a, b) {
+      return a.localeCompare(b, undefined, { sensitivity: 'base' });
+    });
+  }
+
+  domRefs.setSelect.innerHTML = '';
+
+  availableSets.forEach(function(name) {
+    var option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    domRefs.setSelect.appendChild(option);
+  });
+
+  domRefs.setSelect.value = resolvedActiveSet;
+}
+
+function switchToSet(rawName) {
+  var targetName = typeof rawName === 'string' ? rawName.trim() : '';
+
+  if (!targetName) {
+    return;
+  }
+
+  var result = ouicards.useSet(targetName);
+  populateSetOptions(result && Array.isArray(result.sets) ? result.sets : null, result && result.activeSet ? result.activeSet : targetName);
+  sessionStarted = false;
+  updateFooter();
+  presentCurrentCard();
+}
+
+function createNewSet() {
+  if (typeof window === 'undefined' || typeof window.prompt !== 'function') {
+    return;
+  }
+
+  var proposedName = window.prompt('Name your new flashcard set · Nombra tu nuevo conjunto de tarjetas');
+
+  if (typeof proposedName !== 'string') {
+    return;
+  }
+
+  var trimmed = proposedName.trim();
+
+  if (trimmed === '') {
+    return;
+  }
+
+  var existingSets = ouicards.listSets();
+  var duplicate = existingSets.find(function(name) {
+    return typeof name === 'string' && name.toLowerCase() === trimmed.toLowerCase();
+  });
+
+  if (duplicate) {
+    if (typeof window.alert === 'function') {
+      window.alert('That set already exists. Switching to "' + duplicate + '". Ese conjunto ya existe. Cambiando a "' + duplicate + '".');
+    }
+
+    switchToSet(duplicate);
+    return;
+  }
+
+  var result = ouicards.useSet(trimmed);
+  populateSetOptions(result && Array.isArray(result.sets) ? result.sets : null, result && result.activeSet ? result.activeSet : trimmed);
+  sessionStarted = false;
+  updateFooter();
+  presentCurrentCard();
 }
 
 async function ensureDeckLoaded() {
@@ -84,11 +203,9 @@ async function ensureDeckLoaded() {
 
 function hasStoredFlashcards() {
   try {
-    return typeof localStorage !== 'undefined' &&
-      typeof localStorage.flashcards === 'string' &&
-      localStorage.flashcards !== '[]';
+    return typeof ouicards.hasStoredFlashcards === 'function' && ouicards.hasStoredFlashcards();
   } catch (error) {
-    console.warn('LocalStorage could not be accessed.', error);
+    console.warn('Unable to determine whether flashcards exist.', error);
     return false;
   }
 }
@@ -199,7 +316,23 @@ function presentCurrentCard() {
   var newQuestion = ouicards.next();
 
   if (!newQuestion) {
-    domRefs.questionContent.innerHTML = '<p>Add flashcards to get started. Agrega tarjetas para comenzar.</p>';
+    var activeSetName = typeof ouicards.getActiveSet === 'function' ? ouicards.getActiveSet() : '';
+
+    domRefs.questionContent.innerHTML = '';
+
+    var englishPrompt = document.createElement('p');
+    englishPrompt.textContent = activeSetName
+      ? 'Add flashcards to "' + activeSetName + '" to get started.'
+      : 'Add flashcards to get started.';
+
+    var spanishPrompt = document.createElement('p');
+    spanishPrompt.textContent = activeSetName
+      ? 'Agrega tarjetas a "' + activeSetName + '" para comenzar.'
+      : 'Agrega tarjetas para comenzar.';
+
+    domRefs.questionContent.appendChild(englishPrompt);
+    domRefs.questionContent.appendChild(spanishPrompt);
+
     domRefs.answerContent.innerHTML = '';
     sessionStarted = false;
     return;

@@ -1,6 +1,8 @@
 ;(function(exports) {
   var cachedStorage = null;
   var storageEvaluated = false;
+  var STORAGE_KEY = 'ouicardsSets';
+  var DEFAULT_SET_NAME = 'Default';
 
   function safeLocalStorage() {
     if (storageEvaluated) {
@@ -44,6 +46,125 @@
     }
 
     return element.value || '';
+  }
+
+  function safeParseJSON(value, fallback) {
+    if (typeof value !== 'string') {
+      return fallback;
+    }
+
+    try {
+      return JSON.parse(value);
+    } catch (error) {
+      console.warn('Failed to parse stored JSON value.', error);
+      return fallback;
+    }
+  }
+
+  function emptySetState() {
+    return { flashcards: [], bucketA: [], bucketB: [], bucketC: [] };
+  }
+
+  function sanitizeSetName(name) {
+    if (typeof name !== 'string') {
+      return DEFAULT_SET_NAME;
+    }
+
+    var trimmed = name.trim();
+    return trimmed === '' ? DEFAULT_SET_NAME : trimmed;
+  }
+
+  function readStoragePayload(storage) {
+    var payload = { activeSet: DEFAULT_SET_NAME, sets: {} };
+
+    if (!storage) {
+      return payload;
+    }
+
+    if (typeof storage[STORAGE_KEY] === 'string') {
+      var parsed = safeParseJSON(storage[STORAGE_KEY], null);
+
+      if (parsed && typeof parsed === 'object') {
+        if (typeof parsed.activeSet === 'string' && parsed.activeSet.trim() !== '') {
+          payload.activeSet = parsed.activeSet;
+        }
+
+        if (parsed.sets && typeof parsed.sets === 'object') {
+          payload.sets = parsed.sets;
+        }
+      }
+    }
+
+    if (Object.keys(payload.sets).length === 0) {
+      var legacyFlashcards = safeParseJSON(storage ? storage.flashcards : null, []);
+      var legacyBucketA = safeParseJSON(storage ? storage.bucketA : null, []);
+      var legacyBucketB = safeParseJSON(storage ? storage.bucketB : null, []);
+      var legacyBucketC = safeParseJSON(storage ? storage.bucketC : null, []);
+
+      if (legacyFlashcards.length || legacyBucketA.length || legacyBucketB.length || legacyBucketC.length) {
+        payload.sets[DEFAULT_SET_NAME] = {
+          flashcards: legacyFlashcards,
+          bucketA: legacyBucketA,
+          bucketB: legacyBucketB,
+          bucketC: legacyBucketC,
+        };
+
+        payload.activeSet = DEFAULT_SET_NAME;
+        storage[STORAGE_KEY] = JSON.stringify(payload);
+        storage.flashcards = '[]';
+        storage.bucketA = '[]';
+        storage.bucketB = '[]';
+        storage.bucketC = '[]';
+      }
+    }
+
+    return payload;
+  }
+
+  function writeStoragePayload(storage, payload) {
+    if (!storage) {
+      return;
+    }
+
+    storage[STORAGE_KEY] = JSON.stringify(payload);
+  }
+
+  function ensureSet(payload, setName) {
+    var sanitized = sanitizeSetName(setName);
+
+    if (!payload.sets[sanitized]) {
+      payload.sets[sanitized] = emptySetState();
+    }
+
+    return sanitized;
+  }
+
+  function loadSetIntoState(setState) {
+    ouicards.flashcards = Array.isArray(setState.flashcards) ? setState.flashcards : [];
+    ouicards.bucketA = Array.isArray(setState.bucketA) ? setState.bucketA : [];
+    ouicards.bucketB = Array.isArray(setState.bucketB) ? setState.bucketB : [];
+    ouicards.bucketC = Array.isArray(setState.bucketC) ? setState.bucketC : [];
+
+    ouicards.currentBucket = ouicards.bucketA.length ? ouicards.bucketA :
+                         ouicards.bucketB.length ? ouicards.bucketB :
+                         ouicards.bucketC.length ? ouicards.bucketC : [];
+    ouicards.counter = 1;
+  }
+
+  function getActiveSetName(payload) {
+    if (ouicards.activeSet && ouicards.activeSet !== DEFAULT_SET_NAME) {
+      return sanitizeSetName(ouicards.activeSet);
+    }
+
+    if (payload && typeof payload.activeSet === 'string' && payload.activeSet.trim() !== '') {
+      return sanitizeSetName(payload.activeSet);
+    }
+
+    if (ouicards.activeSet) {
+      return sanitizeSetName(ouicards.activeSet);
+    }
+
+    return DEFAULT_SET_NAME;
   }
 
   function loadFromArray(array) {
@@ -190,35 +311,133 @@
       return;
     }
 
-    storage.flashcards = JSON.stringify(ouicards.flashcards);
-    storage.bucketA    = JSON.stringify(ouicards.bucketA);
-    storage.bucketB    = JSON.stringify(ouicards.bucketB);
-    storage.bucketC    = JSON.stringify(ouicards.bucketC);
+    var payload = readStoragePayload(storage);
+    var activeSetName = ensureSet(payload, getActiveSetName(payload));
+
+    payload.activeSet = activeSetName;
+    ouicards.activeSet = activeSetName;
+    payload.sets[activeSetName] = {
+      flashcards: ouicards.flashcards,
+      bucketA: ouicards.bucketA,
+      bucketB: ouicards.bucketB,
+      bucketC: ouicards.bucketC,
+    };
+
+    writeStoragePayload(storage, payload);
   }
 
   function getFromLS() {
     var storage = safeLocalStorage();
 
     if (!storage) {
+      ouicards.activeSet = DEFAULT_SET_NAME;
       ouicards.flashcards    = [];
       ouicards.bucketA       = [];
       ouicards.bucketB       = [];
       ouicards.bucketC       = [];
       ouicards.currentBucket = [];
       ouicards.counter       = 1;
-      return { flashcards: [], bucketA: [], bucketB: [], bucketC: [] };
+      return { flashcards: [], bucketA: [], bucketB: [], bucketC: [], activeSet: DEFAULT_SET_NAME, sets: [] };
     }
 
-    ouicards.flashcards    = JSON.parse(storage.flashcards || '[]');
-    ouicards.bucketA       = JSON.parse(storage.bucketA    || '[]');
-    ouicards.bucketB       = JSON.parse(storage.bucketB    || '[]');
-    ouicards.bucketC       = JSON.parse(storage.bucketC    || '[]');
-    ouicards.currentBucket = ouicards.bucketA.length ? ouicards.bucketA :
-                         ouicards.bucketB.length ? ouicards.bucketB :
-                         ouicards.bucketC.length ? ouicards.bucketC : [];
+    var payload = readStoragePayload(storage);
+    var activeSetName = ensureSet(payload, getActiveSetName(payload));
+    payload.activeSet = activeSetName;
+    ouicards.activeSet = activeSetName;
 
-    ouicards.counter = 1;
-    return {flashcards: ouicards.flashcards, bucketA: ouicards.bucketA, bucketB: ouicards.bucketB, bucketC: ouicards.bucketC};
+    writeStoragePayload(storage, payload);
+
+    loadSetIntoState(payload.sets[activeSetName]);
+
+    return {
+      flashcards: ouicards.flashcards,
+      bucketA: ouicards.bucketA,
+      bucketB: ouicards.bucketB,
+      bucketC: ouicards.bucketC,
+      activeSet: activeSetName,
+      sets: Object.keys(payload.sets),
+    };
+  }
+
+  function useSet(name) {
+    var storage = safeLocalStorage();
+    var targetName = sanitizeSetName(name);
+
+    if (!storage) {
+      ouicards.activeSet = targetName;
+      ouicards.flashcards = [];
+      ouicards.bucketA = [];
+      ouicards.bucketB = [];
+      ouicards.bucketC = [];
+      ouicards.currentBucket = [];
+      ouicards.counter = 1;
+      return {
+        flashcards: [],
+        bucketA: [],
+        bucketB: [],
+        bucketC: [],
+        activeSet: targetName,
+        sets: [targetName],
+      };
+    }
+
+    var payload = readStoragePayload(storage);
+    var activeSetName = ensureSet(payload, targetName);
+
+    payload.activeSet = activeSetName;
+    ouicards.activeSet = activeSetName;
+
+    writeStoragePayload(storage, payload);
+
+    loadSetIntoState(payload.sets[activeSetName]);
+
+    return {
+      flashcards: ouicards.flashcards,
+      bucketA: ouicards.bucketA,
+      bucketB: ouicards.bucketB,
+      bucketC: ouicards.bucketC,
+      activeSet: activeSetName,
+      sets: Object.keys(payload.sets),
+    };
+  }
+
+  function listSets() {
+    var storage = safeLocalStorage();
+
+    if (!storage) {
+      return [getActiveSetName({ activeSet: ouicards.activeSet })];
+    }
+
+    var payload = readStoragePayload(storage);
+    var setNames = Object.keys(payload.sets);
+
+    if (setNames.length === 0) {
+      setNames.push(getActiveSetName(payload));
+    }
+
+    return setNames;
+  }
+
+  function getActiveSet() {
+    var storage = safeLocalStorage();
+    var payload = readStoragePayload(storage);
+    var active = getActiveSetName(payload);
+    ouicards.activeSet = active;
+    return active;
+  }
+
+  function hasStoredFlashcards(name) {
+    var storage = safeLocalStorage();
+
+    if (!storage) {
+      return false;
+    }
+
+    var payload = readStoragePayload(storage);
+    var target = ensureSet(payload, name ? name : getActiveSetName(payload));
+    var setState = payload.sets[target];
+
+    return !!(setState && Array.isArray(setState.flashcards) && setState.flashcards.length);
   }
 
   function resetBuckets() {
@@ -237,6 +456,7 @@
     bucketB:            [],
     bucketC:            [],
     counter:            1,
+    activeSet:          DEFAULT_SET_NAME,
     loadFromArray:      loadFromArray,
     loadFromBrowser:    loadFromBrowser,
     next:               next,
@@ -247,7 +467,11 @@
     buildQuestionHTML:  buildQuestionHTML,
     saveToLS:           saveToLS,
     getFromLS:          getFromLS,
-    resetBuckets:       resetBuckets
+    resetBuckets:       resetBuckets,
+    useSet:             useSet,
+    listSets:           listSets,
+    getActiveSet:       getActiveSet,
+    hasStoredFlashcards: hasStoredFlashcards
   };
 
 // jQuery magic
