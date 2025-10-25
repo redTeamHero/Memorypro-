@@ -1,20 +1,49 @@
 var sessionStarted = false;
+var domRefs = {
+  uploadLabel: null,
+  questionsInput: null,
+  loadButton: null,
+  questionSection: null,
+  answerSection: null,
+  questionContent: null,
+  answerContent: null,
+  questionsCount: null,
+  statDetails: null,
+  correctButtons: null,
+  wrongButtons: null,
+};
 
-$(document).ready(function() {
-  initializeApp();
+document.addEventListener('DOMContentLoaded', function() {
+  initializeApp().catch(function(error) {
+    console.error('Failed to initialize Memorypro UI.', error);
+  });
 });
 
 async function initializeApp() {
+  cacheDom();
   await ensureDeckLoaded();
-
   bindHandlers();
   ouicards.getFromLS();
   updateFooter();
   presentCurrentCard();
 }
 
+function cacheDom() {
+  domRefs.uploadLabel = document.querySelector('.upload-questions-label');
+  domRefs.questionsInput = document.getElementById('questions-input-area');
+  domRefs.loadButton = document.getElementById('load-questions');
+  domRefs.questionSection = document.querySelector('.card-section.question');
+  domRefs.answerSection = document.querySelector('.card-section.answer');
+  domRefs.questionContent = domRefs.questionSection ? domRefs.questionSection.querySelector('.card-content') : null;
+  domRefs.answerContent = domRefs.answerSection ? domRefs.answerSection.querySelector('.card-content') : null;
+  domRefs.questionsCount = document.querySelector('.questions-count');
+  domRefs.statDetails = document.getElementById('stat-details');
+  domRefs.correctButtons = document.querySelectorAll('.control-button.correct');
+  domRefs.wrongButtons = document.querySelectorAll('.control-button.wrong');
+}
+
 async function ensureDeckLoaded() {
-  if (localStorage.flashcards && localStorage.flashcards !== '[]') {
+  if (hasStoredFlashcards()) {
     return;
   }
 
@@ -53,16 +82,30 @@ async function ensureDeckLoaded() {
   ouicards.loadFromArray(myFlashcards);
 }
 
+function hasStoredFlashcards() {
+  try {
+    return typeof localStorage !== 'undefined' &&
+      typeof localStorage.flashcards === 'string' &&
+      localStorage.flashcards !== '[]';
+  } catch (error) {
+    console.warn('LocalStorage could not be accessed.', error);
+    return false;
+  }
+}
+
 function bindHandlers() {
-  attachActivate($('.upload-questions-label'), function() {
-    $('.upload-questions-label').hide();
-    $('#questions-input-area').slideDown(120, function() {
-      $('#load-questions').fadeIn(160);
-    });
+  attachActivate(domRefs.uploadLabel, function() {
+    hideElement(domRefs.uploadLabel);
+    showElement(domRefs.questionsInput, 'block');
+    showElement(domRefs.loadButton, 'inline-flex');
+
+    if (domRefs.questionsInput) {
+      domRefs.questionsInput.focus();
+    }
   });
 
-  attachActivate($('#load-questions'), function() {
-    var data = ouicards.loadFromBrowser('#questions-input-area', ',');
+  attachActivate(domRefs.loadButton, function() {
+    var data = ouicards.loadFromBrowser(domRefs.questionsInput, ',');
 
     if (!data) {
       return;
@@ -72,15 +115,20 @@ function bindHandlers() {
     updateFooter();
     presentCurrentCard();
 
-    $('#questions-input-area').slideUp(120);
-    $('#load-questions').fadeOut(80);
-    $('#questions-input-area').val('');
-    $('.upload-questions-label')
-      .text('Load another deck · Cargar otro mazo')
-      .fadeIn(160);
+    hideElement(domRefs.questionsInput);
+    hideElement(domRefs.loadButton);
+
+    if (domRefs.questionsInput) {
+      domRefs.questionsInput.value = '';
+    }
+
+    if (domRefs.uploadLabel) {
+      domRefs.uploadLabel.textContent = 'Load another deck · Cargar otro mazo';
+      showElement(domRefs.uploadLabel, 'inline-flex');
+    }
   });
 
-  attachActivate($('.control-button.correct'), function() {
+  attachActivate(domRefs.correctButtons, function() {
     if (!sessionStarted) {
       presentCurrentCard();
       return;
@@ -91,7 +139,7 @@ function bindHandlers() {
     presentCurrentCard();
   });
 
-  attachActivate($('.control-button.wrong'), function() {
+  attachActivate(domRefs.wrongButtons, function() {
     if (!sessionStarted) {
       presentCurrentCard();
       return;
@@ -102,65 +150,117 @@ function bindHandlers() {
     presentCurrentCard();
   });
 
-  attachActivate($('.question'), revealAnswer);
-  attachActivate($('.answer'), revealAnswer);
+  attachActivate([domRefs.questionSection, domRefs.answerSection], revealAnswer);
 }
 
-function attachActivate($element, handler) {
-  $element.on('click', function(event) {
-    if ($(event.target).closest('a').length) {
+function attachActivate(targets, handler) {
+  if (!targets) {
+    return;
+  }
+
+  var elements;
+
+  if (Array.isArray(targets)) {
+    elements = targets;
+  } else if (typeof NodeList !== 'undefined' && targets instanceof NodeList) {
+    elements = Array.from(targets);
+  } else {
+    elements = [targets];
+  }
+
+  elements.forEach(function(element) {
+    if (!element) {
       return;
     }
 
-    event.preventDefault();
-    handler(event);
-  });
+    element.addEventListener('click', function(event) {
+      if (event.target && event.target.closest && event.target.closest('a')) {
+        return;
+      }
 
-  $element.on('keydown', function(event) {
-    if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       handler(event);
-    }
+    });
+
+    element.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        handler(event);
+      }
+    });
   });
 }
 
 function presentCurrentCard() {
+  if (!domRefs.questionContent || !domRefs.answerContent) {
+    return;
+  }
+
   var newQuestion = ouicards.next();
 
   if (!newQuestion) {
-    $('.question .card-content').html('<p>Add flashcards to get started. Agrega tarjetas para comenzar.</p>');
-    $('.answer .card-content').empty();
+    domRefs.questionContent.innerHTML = '<p>Add flashcards to get started. Agrega tarjetas para comenzar.</p>';
+    domRefs.answerContent.innerHTML = '';
     sessionStarted = false;
     return;
   }
 
-  var $questionContent = $('.question .card-content');
-  var $answerContent = $('.answer .card-content');
+  domRefs.questionContent.innerHTML = '';
+  domRefs.questionContent.appendChild(newQuestion.question);
 
-  $questionContent.empty().append(newQuestion.question);
-  $answerContent.empty().append(newQuestion.answer);
+  domRefs.answerContent.innerHTML = '';
+  domRefs.answerContent.appendChild(newQuestion.answer);
 
-  $answerContent.children().hide();
-  $('.answer').removeClass('revealed');
+  Array.from(domRefs.answerContent.children).forEach(function(child) {
+    child.style.display = 'none';
+  });
+
+  if (domRefs.answerSection) {
+    domRefs.answerSection.classList.remove('revealed');
+  }
+
   sessionStarted = true;
 }
 
 function revealAnswer() {
-  if (!sessionStarted) {
+  if (!sessionStarted || !domRefs.answerSection || !domRefs.answerContent) {
     return;
   }
 
-  $('.answer').addClass('revealed');
-  $('.answer .card-content').children().fadeIn(140);
+  domRefs.answerSection.classList.add('revealed');
+  Array.from(domRefs.answerContent.children).forEach(function(child) {
+    child.style.removeProperty('display');
+    child.style.display = 'block';
+  });
 }
 
 function updateFooter() {
+  if (!domRefs.questionsCount || !domRefs.statDetails) {
+    return;
+  }
+
   var total = ouicards.flashcards.length;
   var totalLabel = total === 1 ? 'card · tarjeta lista' : 'cards · tarjetas listas';
-  $('.questions-count').html(total + ' ' + totalLabel);
+  domRefs.questionsCount.textContent = total + ' ' + totalLabel;
 
   var bucketSummary = 'A:' + ouicards.bucketA.length + ' · ' +
                       'B:' + ouicards.bucketB.length + ' · ' +
                       'C:' + ouicards.bucketC.length;
-  $('#stat-details').text(bucketSummary);
+  domRefs.statDetails.textContent = bucketSummary;
+}
+
+function showElement(element, displayValue) {
+  if (!element) {
+    return;
+  }
+
+  element.style.display = displayValue || 'block';
+}
+
+function hideElement(element) {
+  if (!element) {
+    return;
+  }
+
+  element.style.display = 'none';
 }
