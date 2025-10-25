@@ -1,94 +1,215 @@
-var start; // used to initialize the app
+var sessionStarted = false;
+var progressTotals = { correct: 0, wrong: 0 };
 
 $(document).ready(function() {
-  // Load default questions if no flashcards are found in localStorage
-  if (!localStorage.flashcards || localStorage.flashcards === '[]')
-    ouicards.loadFromArray(myFlashcards);
-  initializeHandlers();
+  bindHandlers();
+  initializeDeck();
 });
 
-function initializeHandlers() {
-  // Unbind all events, in case the user loads new flashcard questions
-  $('#load-questions').unbind();
-  $('.correct').unbind();
-  $('.wrong').unbind();
-  $('.question').unbind();
-  $('.answer').unbind();
+function initializeDeck() {
+  if (localStorage.flashcards && localStorage.flashcards !== '[]') {
+    ouicards.getFromLS();
+    updateFooter();
+    presentCurrentCard();
+    recordProgress('session_resume');
+    return;
+  }
 
-  ouicards.getFromLS();
-  updateFooter();
-  // Load question functionality
-  $('.upload label').on('click', function() {
+  setLoadingState(true, 'Loading starter deck from Memorypro...');
+
+  fetch('/api/decks/default')
+    .then(function(response) {
+      if (!response.ok) {
+        throw new Error('Unable to load starter deck');
+      }
+      return response.json();
+    })
+    .then(function(deck) {
+      if (!deck || !Array.isArray(deck.flashcards) || deck.flashcards.length === 0) {
+        showEmptyState();
+        return;
+      }
+
+      ouicards.loadFromArray(deck.flashcards);
+      ouicards.getFromLS();
+      updateFooter();
+      presentCurrentCard();
+      recordProgress('session_start');
+    })
+    .catch(function() {
+      showEmptyState();
+    })
+    .finally(function() {
+      setLoadingState(false);
+    });
+}
+
+function setLoadingState(isLoading, message) {
+  var $questionContent = $('.question .card-content');
+  var $answerContent = $('.answer .card-content');
+
+  if (isLoading) {
+    $questionContent.html('<p>' + (message || 'Preparing your flashcards...') + '</p>');
+    $answerContent.html('<p>Please wait while we connect to the Memorypro API.</p>');
+  }
+}
+
+function showEmptyState() {
+  var $questionContent = $('.question .card-content');
+  var $answerContent = $('.answer .card-content');
+
+  $questionContent.html('<p>Add flashcards to get started.</p>');
+  $answerContent.html('<p>We could not load the starter deck. Paste your own CSV or try again.</p>');
+  sessionStarted = false;
+}
+
+function bindHandlers() {
+  attachActivate($('.upload-questions-label'), function() {
     $('.upload-questions-label').hide();
-    $('.upload').css({"padding": " 0 2px 10px 2px"});
-    $('#questions-input-area').show(100, function(){
-      $('#load-questions').show(400);
+    $('#questions-input-area').slideDown(120, function() {
+      $('#load-questions').fadeIn(160);
     });
   });
 
-  $('#load-questions').on('click', function() {
-    initializeHandlers(ouicards.loadFromBrowser('#questions-input-area', ','));
-    changeQuestion();
-    $('#questions-input-area').hide();
-    $('.upload').css({"padding": "10px"});
-    $('#load-questions').hide();
-    $('.upload-questions-label').text("Upload New Questions");
-    $('.upload-questions-label').show();
-    start = true;
+  attachActivate($('#load-questions'), function() {
+    var data = ouicards.loadFromBrowser('#questions-input-area', ',');
+
+    if (!data) {
+      return;
+    }
+
+    ouicards.getFromLS();
+    updateFooter();
+    presentCurrentCard();
+    recordProgress('deck_uploaded');
+
+    $('#questions-input-area').slideUp(120);
+    $('#load-questions').fadeOut(80);
+    $('#questions-input-area').val('');
+    $('.upload-questions-label')
+      .text('Load another deck')
+      .fadeIn(160);
   });
 
-  // Correct and wrong answer functionality
-  $('.correct').on('click', function() {
-    if (!start) {
-      console.log(start);
-      start = true;
-      changeQuestion();
+  attachActivate($('.control-button.correct'), function() {
+    if (!sessionStarted) {
+      presentCurrentCard();
       return;
     }
 
     ouicards.correct();
-    changeQuestion();
+    progressTotals.correct += 1;
     updateFooter();
+    presentCurrentCard();
+    recordProgress('correct');
   });
 
-  $('.wrong').on('click', function() {
-    if (!start) {
-      start = true;
-      changeQuestion();
+  attachActivate($('.control-button.wrong'), function() {
+    if (!sessionStarted) {
+      presentCurrentCard();
       return;
     }
 
     ouicards.wrong();
-    changeQuestion();
+    progressTotals.wrong += 1;
     updateFooter();
+    presentCurrentCard();
+    recordProgress('wrong');
   });
 
-  function changeQuestion() {
-    var newQuestion = ouicards.next();
+  attachActivate($('.question'), revealAnswer);
+  attachActivate($('.answer'), revealAnswer);
+}
 
-    if (newQuestion === undefined) {
-      console.log('Trying to load an undefined question into the DOM.');
+function attachActivate($element, handler) {
+  $element.on('click', function(event) {
+    if ($(event.target).closest('a').length) {
       return;
     }
 
-    $('.question').html(newQuestion.question);
-    $('.answer').html(newQuestion.answer);
-    $('.answer').children().hide();
-  }
-
-  $('.question').on('click', function() {
-    $('.answer p').show();
+    event.preventDefault();
+    handler(event);
   });
 
-  $('.answer').on('click', function() {
-    $('.answer p').show();
+  $element.on('keydown', function(event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handler(event);
+    }
   });
+}
 
-  // Update footer info
-  function updateFooter() {
-    $('.questions-count').html(ouicards.flashcards.length + ' questions');
-    $('#stat-details').text(ouicards.bucketA.length + ' - ' +
-                            ouicards.bucketB.length + ' - ' +
-                            ouicards.bucketC.length);
+function presentCurrentCard() {
+  var newQuestion = ouicards.next();
+
+  if (!newQuestion) {
+    showEmptyState();
+    return;
   }
+
+  var $questionContent = $('.question .card-content');
+  var $answerContent = $('.answer .card-content');
+
+  $questionContent.empty().append(newQuestion.question);
+  $answerContent.empty().append(newQuestion.answer);
+
+  $answerContent.children().hide();
+  $('.answer').removeClass('revealed');
+  sessionStarted = true;
+}
+
+function revealAnswer() {
+  if (!sessionStarted) {
+    return;
+  }
+
+  $('.answer').addClass('revealed');
+  $('.answer .card-content').children().fadeIn(140);
+}
+
+function updateFooter() {
+  var total = ouicards.flashcards.length || 0;
+  var totalLabel = total === 1 ? 'card ready' : 'cards ready';
+  $('.questions-count').html(total + ' ' + totalLabel);
+
+  var bucketSummary = 'A:' + ouicards.bucketA.length + ' · ' +
+                      'B:' + ouicards.bucketB.length + ' · ' +
+                      'C:' + ouicards.bucketC.length;
+  $('#stat-details').text(bucketSummary);
+}
+
+function recordProgress(eventName) {
+  var payload = {
+    event: eventName,
+    totals: {
+      correct: progressTotals.correct,
+      wrong: progressTotals.wrong,
+      deckSize: ouicards.flashcards.length
+    },
+    bucketSnapshot: {
+      A: ouicards.bucketA.length,
+      B: ouicards.bucketB.length,
+      C: ouicards.bucketC.length
+    }
+  };
+
+  var body = JSON.stringify(payload);
+
+  if (navigator.sendBeacon) {
+    try {
+      var blob = new Blob([body], { type: 'application/json' });
+      navigator.sendBeacon('/api/progress', blob);
+      return;
+    } catch (error) {
+      // Fallback to fetch below
+    }
+  }
+
+  fetch('/api/progress', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body
+  }).catch(function() {
+    // Swallow network errors; the UI should not break when offline.
+  });
 }
