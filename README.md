@@ -101,7 +101,7 @@ Visit the refreshed Memorypro demo at `live-examples/index.html` once you start 
 
 These steps are sufficient for experimenting with the library and modifying the example flashcards locally.
 
-### > As a jQuery plugin
+4. Visit `http://localhost:5000/` in your browser to interact with the live flashcard experience.
 
 These steps are sufficient for experimenting with the library and modifying the example flashcards locally.
 

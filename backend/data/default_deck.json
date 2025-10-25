@@ -1,0 +1,46 @@
+{
+  "name": "memorypro-starter",
+  "description": "Baseline deck that teaches Memorypro customers the core credit-dispute workflow.",
+  "flashcards": [
+    {
+      "question": "What regulation defines how furnishers must report account data to bureaus?",
+      "answer": "Metro-2®, the Consumer Data Industry Association's standardized reporting format."
+    },
+    {
+      "question": "Which federal law gives consumers the right to dispute inaccurate credit information?",
+      "answer": "The Fair Credit Reporting Act (FCRA)."
+    },
+    {
+      "question": "What should your first step be before sending a dispute letter?",
+      "answer": "Pull a fresh tri-merge report, tag potential inaccuracies, and document supporting evidence."
+    },
+    {
+      "question": "How many days do bureaus typically have to respond to a dispute?",
+      "answer": "30 days from receipt, with a possible 15-day extension when new documentation is provided."
+    },
+    {
+      "question": "Why do we avoid promising fast score boosts in our copy?",
+      "answer": "Compliance—results vary, so we focus on transparency, documentation, and timely follow-up."
+    },
+    {
+      "question": "What KPI tracks how many prospects turn into booked consults?",
+      "answer": "Lead-to-Consult Conversion Rate."
+    },
+    {
+      "question": "Which Memorypro feature automates certified mail tracking?",
+      "answer": "The Certified Mail Queue, which generates USPS labels and logs delivery status."
+    },
+    {
+      "question": "After a correct streak of five, what upsell should the coach suggest?",
+      "answer": "Previewing our premium Metro-2 automation templates."
+    },
+    {
+      "question": "What data do we log when a user marks a card as wrong?",
+      "answer": "Timestamp, card buckets, and aggregate accuracy—never full PII or report numbers."
+    },
+    {
+      "question": "How often should the team review dispute outcomes for QA?",
+      "answer": "Weekly—flag anomalies, update playbooks, and refresh the deck with new objections."
+    }
+  ]
+}
