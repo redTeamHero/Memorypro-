@@ -21,6 +21,30 @@ __Note:__ This example was built in June 2013 and may be outdated by the time yo
 
 ## Using Ouicards
 
+## Getting Started Locally
+
+1. Clone the repository and move into the project directory:
+
+   ```bash
+   git clone https://github.com/<your-username>/Memorypro-.git
+   cd Memorypro-
+   ```
+
+2. Launch a lightweight static web server (any option works; below uses Python 3, which ships with most systems):
+
+   ```bash
+   python3 -m http.server 8000
+   ```
+
+   This serves the project from `http://localhost:8000/`.
+
+3. In your browser, open `http://localhost:8000/live-examples/index.html` to interact with the demo flashcards UI.
+
+   - Use `ouicards.js` directly in your own HTML pages or explore the example jQuery integration at `live-examples/ouicards-jquery-example.html`.
+   - Stop the local server anytime with `Ctrl+C`.
+
+These steps are sufficient for experimenting with the library and modifying the example flashcards locally.
+
 ### > As a jQuery plugin
 
 If you'd like to quickly get running with OuiCards, you can simply create a \<ul> with the right CSS Classes and OuiCards will take care of the rest.
