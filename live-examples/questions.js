@@ -274,7 +274,7 @@ console.log(word.repeat(3)); // "Hi Hi Hi "
 Explanation:
 repeat(count)
 - Returns a new string repeated count times.`
-  }
+  },
     {
     question: "Object.keys()",
     answer: `Example:
