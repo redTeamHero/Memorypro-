@@ -1,4 +1,4 @@
-var jsFlashcards = [
+var  myFlashcards = [
   {
     question: ".slice()",
     answer: `Example:
