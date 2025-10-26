@@ -275,7 +275,7 @@ Explanation:
 repeat(count)
 - Returns a new string repeated count times.`
   },
-    {
+  {
     question: "Object.keys()",
     answer: `Example:
 const user = { name: "John", age: 30 };
