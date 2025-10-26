@@ -1,5 +1,5 @@
 
-# Ouicards - Fancy Schmancy Flashcards
+# Memorypro - Mind Hacking.
 Memorypro allows you to easily build flashcards to study for... everything!
 
 Memorypro is a modernized flashcard trainer that keeps the original OuiCards spaced-repetition engine while presenting a polished, conversion-ready demo for credit-repair education. The UI showcases how to load CSV decks, walk through cards, and mark progress across Leitner buckets—perfect for onboarding prospects into premium dispute-automation flows.
