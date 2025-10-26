@@ -614,5 +614,4 @@ Explanation:
 prompt(message)
 - Displays a dialog asking for user input and returns it as a string.`
   }
-);
 ];
