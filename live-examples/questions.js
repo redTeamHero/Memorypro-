@@ -275,4 +275,344 @@ Explanation:
 repeat(count)
 - Returns a new string repeated count times.`
   }
+    {
+    question: "Object.keys()",
+    answer: `Example:
+const user = { name: "John", age: 30 };
+console.log(Object.keys(user)); // ["name", "age"]
+
+Explanation:
+Object.keys(obj)
+- Returns an array of all the object's property names.`
+  },
+  {
+    question: "Object.values()",
+    answer: `Example:
+const user = { name: "John", age: 30 };
+console.log(Object.values(user)); // ["John", 30]
+
+Explanation:
+Object.values(obj)
+- Returns an array of the object's property values.`
+  },
+  {
+    question: "Object.entries()",
+    answer: `Example:
+const user = { name: "John", age: 30 };
+console.log(Object.entries(user)); // [["name", "John"], ["age", 30]]
+
+Explanation:
+Object.entries(obj)
+- Returns an array of key/value pairs.`
+  },
+  {
+    question: "Object.assign()",
+    answer: `Example:
+const target = { a: 1 };
+const source = { b: 2 };
+Object.assign(target, source);
+console.log(target); // { a: 1, b: 2 }
+
+Explanation:
+Object.assign(target, ...sources)
+- Copies properties from one or more source objects into a target object.`
+  },
+  {
+    question: "Object.freeze()",
+    answer: `Example:
+const person = { name: "John" };
+Object.freeze(person);
+person.name = "Jane";
+console.log(person.name); // "John"
+
+Explanation:
+Object.freeze(obj)
+- Prevents changes to an object (no edits, no additions, no deletions).`
+  },
+  {
+    question: "Object.hasOwn()",
+    answer: `Example:
+const user = { name: "Alice" };
+console.log(Object.hasOwn(user, "name")); // true
+
+Explanation:
+Object.hasOwn(obj, prop)
+- Checks if the object has a property as its own (not inherited).`
+  },
+  {
+    question: "JSON.stringify()",
+    answer: `Example:
+const user = { name: "John", age: 30 };
+console.log(JSON.stringify(user)); // '{"name":"John","age":30}'
+
+Explanation:
+JSON.stringify(obj)
+- Converts a JavaScript object into a JSON string.`
+  },
+  {
+    question: "JSON.parse()",
+    answer: `Example:
+const json = '{"name":"John","age":30}';
+console.log(JSON.parse(json)); // { name: "John", age: 30 }
+
+Explanation:
+JSON.parse(jsonString)
+- Parses a JSON string into a JavaScript object.`
+  },
+  {
+    question: "Math.floor()",
+    answer: `Example:
+console.log(Math.floor(4.9)); // 4
+
+Explanation:
+Math.floor(number)
+- Rounds a number down to the nearest integer.`
+  },
+  {
+    question: "Math.ceil()",
+    answer: `Example:
+console.log(Math.ceil(4.1)); // 5
+
+Explanation:
+Math.ceil(number)
+- Rounds a number up to the nearest integer.`
+  },
+  {
+    question: "Math.round()",
+    answer: `Example:
+console.log(Math.round(4.5)); // 5
+
+Explanation:
+Math.round(number)
+- Rounds a number to the nearest integer.`
+  },
+  {
+    question: "Math.random()",
+    answer: `Example:
+console.log(Math.random()); // Random number between 0 and 1
+
+Explanation:
+Math.random()
+- Returns a random decimal between 0 (inclusive) and 1 (exclusive).`
+  },
+  {
+    question: "Math.max()",
+    answer: `Example:
+console.log(Math.max(3, 7, 2)); // 7
+
+Explanation:
+Math.max(a, b, ...)
+- Returns the largest number of the provided values.`
+  },
+  {
+    question: "Math.min()",
+    answer: `Example:
+console.log(Math.min(3, 7, 2)); // 2
+
+Explanation:
+Math.min(a, b, ...)
+- Returns the smallest number of the provided values.`
+  },
+  {
+    question: "Math.pow()",
+    answer: `Example:
+console.log(Math.pow(2, 3)); // 8
+
+Explanation:
+Math.pow(base, exponent)
+- Returns the base raised to the exponent power.`
+  },
+  {
+    question: "Math.sqrt()",
+    answer: `Example:
+console.log(Math.sqrt(16)); // 4
+
+Explanation:
+Math.sqrt(number)
+- Returns the square root of a number.`
+  },
+  {
+    question: "Date.now()",
+    answer: `Example:
+console.log(Date.now()); // e.g., 1690000000000
+
+Explanation:
+Date.now()
+- Returns the number of milliseconds since January 1, 1970.`
+  },
+  {
+    question: "Date.toLocaleString()",
+    answer: `Example:
+const date = new Date();
+console.log(date.toLocaleString()); // e.g., "10/26/2025, 8:30:00 AM"
+
+Explanation:
+toLocaleString()
+- Returns a human-readable date and time string based on locale.`
+  },
+  {
+    question: "Promise.all()",
+    answer: `Example:
+const p1 = Promise.resolve(1);
+const p2 = Promise.resolve(2);
+Promise.all([p1, p2]).then(values => console.log(values)); // [1, 2]
+
+Explanation:
+Promise.all(iterable)
+- Waits for all promises to resolve and returns an array of results.`
+  },
+  {
+    question: "Promise.race()",
+    answer: `Example:
+const p1 = new Promise(res => setTimeout(res, 100, "slow"));
+const p2 = new Promise(res => setTimeout(res, 50, "fast"));
+Promise.race([p1, p2]).then(console.log); // "fast"
+
+Explanation:
+Promise.race(iterable)
+- Returns the result of the first resolved or rejected promise.`
+  },
+  {
+    question: "Array.isArray()",
+    answer: `Example:
+console.log(Array.isArray([1,2,3])); // true
+
+Explanation:
+Array.isArray(value)
+- Checks if the given value is an array.`
+  },
+  {
+    question: "parseInt()",
+    answer: `Example:
+console.log(parseInt("42px")); // 42
+
+Explanation:
+parseInt(string)
+- Parses a string and returns an integer.`
+  },
+  {
+    question: "parseFloat()",
+    answer: `Example:
+console.log(parseFloat("3.14abc")); // 3.14
+
+Explanation:
+parseFloat(string)
+- Parses a string and returns a floating-point number.`
+  },
+  {
+    question: "isNaN()",
+    answer: `Example:
+console.log(isNaN("hello")); // true
+console.log(isNaN(123)); // false
+
+Explanation:
+isNaN(value)
+- Checks whether a value is NaN (Not a Number).`
+  },
+  {
+    question: "document.getElementById()",
+    answer: `Example:
+const el = document.getElementById("title");
+console.log(el.textContent);
+
+Explanation:
+getElementById(id)
+- Selects the first element with the matching ID.`
+  },
+  {
+    question: "document.querySelector()",
+    answer: `Example:
+const el = document.querySelector(".button");
+console.log(el.textContent);
+
+Explanation:
+querySelector(selector)
+- Selects the first element that matches the CSS selector.`
+  },
+  {
+    question: "document.querySelectorAll()",
+    answer: `Example:
+const items = document.querySelectorAll("li");
+items.forEach(i => console.log(i.textContent));
+
+Explanation:
+querySelectorAll(selector)
+- Selects all elements that match the CSS selector.`
+  },
+  {
+    question: "element.addEventListener()",
+    answer: `Example:
+button.addEventListener("click", () => console.log("Clicked!"));
+
+Explanation:
+addEventListener(event, callback)
+- Attaches an event handler to an element.`
+  },
+  {
+    question: "setTimeout()",
+    answer: `Example:
+setTimeout(() => console.log("Hello after 1s"), 1000);
+
+Explanation:
+setTimeout(callback, delay)
+- Runs a function once after the specified delay in milliseconds.`
+  },
+  {
+    question: "setInterval()",
+    answer: `Example:
+setInterval(() => console.log("Tick"), 1000);
+
+Explanation:
+setInterval(callback, delay)
+- Repeatedly runs a function every given number of milliseconds.`
+  },
+  {
+    question: "clearInterval()",
+    answer: `Example:
+const timer = setInterval(() => console.log("Running..."), 1000);
+setTimeout(() => clearInterval(timer), 3000);
+
+Explanation:
+clearInterval(timer)
+- Stops a timer that was started with setInterval().`
+  },
+  {
+    question: "console.log()",
+    answer: `Example:
+console.log("Debug message");
+
+Explanation:
+console.log(value)
+- Prints output to the browser console.`
+  },
+  {
+    question: "alert()",
+    answer: `Example:
+alert("Hello World!");
+
+Explanation:
+alert(message)
+- Displays a popup alert with a message (browser only).`
+  },
+  {
+    question: "confirm()",
+    answer: `Example:
+const result = confirm("Are you sure?");
+console.log(result); // true or false
+
+Explanation:
+confirm(message)
+- Shows a confirmation dialog and returns true/false.`
+  },
+  {
+    question: "prompt()",
+    answer: `Example:
+const name = prompt("Enter your name:");
+console.log(name);
+
+Explanation:
+prompt(message)
+- Displays a dialog asking for user input and returns it as a string.`
+  }
+);
 ];
