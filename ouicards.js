@@ -277,6 +277,45 @@
       return;
     }
 
+    var trimmedInput = rawValue.trim();
+
+    if (trimmedInput === '') {
+      console.log('There are no flashcards to upload.');
+      return;
+    }
+
+    var parsedCards = null;
+
+    if (trimmedInput.charAt(0) === '{' || trimmedInput.charAt(0) === '[') {
+      var parsed = safeParseJSON(trimmedInput, null);
+
+      if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed)) {
+          parsedCards = parsed;
+        } else if (Array.isArray(parsed.flashcards)) {
+          parsedCards = parsed.flashcards;
+        } else if (parsed && (Object.prototype.hasOwnProperty.call(parsed, 'question') || Object.prototype.hasOwnProperty.call(parsed, 'answer'))) {
+          parsedCards = [parsed];
+        }
+      }
+
+      if (parsedCards) {
+        var normalizedCards = parsedCards
+          .filter(function(card) {
+            return card && typeof card === 'object';
+          })
+          .map(normalizeCard)
+          .filter(function(card) {
+            return card.question || card.answer;
+          });
+
+        if (normalizedCards.length) {
+          ouicards.loadFromArray(normalizedCards);
+          return getFromLS();
+        }
+      }
+    }
+
     var userInput = rawValue
       .split(/\r?\n/)
       .map(function(card) {
