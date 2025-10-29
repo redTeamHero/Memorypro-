@@ -831,7 +831,7 @@ function stopSession(options) {
     window.clearTimeout(pendingAdvanceHandle);
     pendingAdvanceHandle = null;
   }
-
+  
   sessionActive = false;
   sessionStarted = false;
   currentCardRecord = null;
@@ -1502,3 +1502,32 @@ function hideElement(element) {
 
   element.style.display = 'none';
 }
+
+function focustimeout() {
+  const btn = document.querySelector("#focus-button");
+  const tone = document.querySelector("#focus-tone");
+
+  if (!btn || !tone) return; // safety check
+
+  btn.addEventListener("click", async () => {
+    try {
+      await tone.play();             // plays the focus tone
+      console.log("Focus tone started!");
+      
+      // optional: add a 25-minute productivity timer sound after tone
+      setTimeout(() => {
+        alert("Session complete!");  // or play another tone here
+      }, 25 * 60 * 1000);
+
+    } catch (err) {
+      console.error("Playback failed:", err);
+    }
+    
+
+    
+  });
+}
+
+
+// wait until DOM is ready
+window.addEventListener("DOMContentLoaded", focustimeout);
