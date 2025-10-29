@@ -409,10 +409,16 @@ async function ensureDeckLoaded() {
 
     if (deck && Array.isArray(deck.flashcards) && deck.flashcards.length > 0) {
       var normalizedCards = deck.flashcards.map(function(card) {
-        return {
+        var normalized = {
           question: typeof card.question === 'string' ? card.question : String(card.question || ''),
           answer: typeof card.answer === 'string' ? card.answer : String(card.answer || ''),
         };
+
+        if (Array.isArray(card.choices)) {
+          normalized.choices = card.choices.slice();
+        }
+
+        return normalized;
       });
 
       ouicards.loadFromArray(normalizedCards);
@@ -1183,6 +1189,12 @@ function buildMultipleChoiceOptions(card) {
     return [];
   }
 
+  var explicitChoices = normalizeChoiceList(card.choices, card.answer);
+
+  if (explicitChoices.length) {
+    return shuffleArray(explicitChoices);
+  }
+
   var allCards = Array.isArray(ouicards.flashcards) ? ouicards.flashcards : [];
   var correctAnswer = normalizeString(card.answer);
   var correctLower = correctAnswer.toLowerCase();
@@ -1249,6 +1261,88 @@ function normalizeString(value) {
   }
 
   return String(value);
+}
+
+function normalizeChoiceOption(option) {
+  if (typeof option === 'string') {
+    var trimmed = option.trim();
+    return trimmed ? { text: trimmed, correct: false } : null;
+  }
+
+  if (!option || typeof option !== 'object') {
+    if (option === null || typeof option === 'undefined') {
+      return null;
+    }
+
+    var coerced = String(option).trim();
+    return coerced ? { text: coerced, correct: false } : null;
+  }
+
+  var text = '';
+
+  if (typeof option.text === 'string') {
+    text = option.text;
+  } else if (typeof option.value === 'string') {
+    text = option.value;
+  } else if (typeof option.label === 'string') {
+    text = option.label;
+  } else if (option.text !== null && typeof option.text !== 'undefined') {
+    text = String(option.text);
+  }
+
+  var trimmedText = typeof text === 'string' ? text.trim() : '';
+
+  if (!trimmedText) {
+    return null;
+  }
+
+  var correct = false;
+
+  if (typeof option.correct === 'boolean') {
+    correct = option.correct;
+  } else if (typeof option.correct === 'string') {
+    correct = option.correct.toLowerCase() === 'true';
+  }
+
+  return { text: trimmedText, correct: correct };
+}
+
+function normalizeChoiceList(choices, fallbackAnswer) {
+  if (!Array.isArray(choices)) {
+    return [];
+  }
+
+  var normalized = choices
+    .map(function(choice) {
+      return normalizeChoiceOption(choice);
+    })
+    .filter(function(choice) {
+      return choice !== null;
+    });
+
+  if (!normalized.length) {
+    return [];
+  }
+
+  var hasCorrect = normalized.some(function(choice) {
+    return choice.correct;
+  });
+
+  if (!hasCorrect && fallbackAnswer) {
+    var target = normalizeString(fallbackAnswer).toLowerCase();
+
+    normalized.some(function(choice) {
+      if (choice.text.toLowerCase() === target) {
+        choice.correct = true;
+        hasCorrect = true;
+        return true;
+      }
+
+      return false;
+    });
+  }
+
+  return hasCorrect ? normalized : [];
 }
 
 function shuffleArray(items) {
@@ -1369,10 +1463,23 @@ function updateJsonPreview() {
     var exportPayload = {
       set: snapshot.name,
       flashcards: snapshot.flashcards.map(function(card) {
-        return {
+        var entry = {
           question: normalizeString(card.question),
           answer: normalizeString(card.answer),
         };
+
+        var normalizedChoices = normalizeChoiceList(card && card.choices, card && card.answer);
+
+        if (normalizedChoices.length) {
+          entry.choices = normalizedChoices.map(function(choice) {
+            return {
+              text: choice.text,
+              correct: !!choice.correct,
+            };
+          });
+        }
+
+        return entry;
       }),
     };
 

@@ -169,7 +169,7 @@
 
   function normalizeCard(card) {
     if (!card || typeof card !== 'object') {
-      return { question: '', answer: '' };
+      return { question: '', answer: '', choices: [] };
     }
 
     var question = '';
@@ -187,9 +187,76 @@
       answer = String(card.answer);
     }
 
+    var trimmedAnswer = answer.trim();
+    var normalizedChoices = [];
+
+    if (Array.isArray(card.choices)) {
+      normalizedChoices = card.choices
+        .map(function(option) {
+          var text = '';
+          var correct = false;
+
+          if (option && typeof option === 'object') {
+            if (typeof option.text === 'string') {
+              text = option.text;
+            } else if (typeof option.value === 'string') {
+              text = option.value;
+            } else if (typeof option.label === 'string') {
+              text = option.label;
+            } else if (option.text !== null && typeof option.text !== 'undefined') {
+              text = String(option.text);
+            }
+
+            if (typeof option.correct === 'boolean') {
+              correct = option.correct;
+            } else if (typeof option.correct === 'string') {
+              correct = option.correct.toLowerCase() === 'true';
+            }
+          } else if (typeof option === 'string') {
+            text = option;
+          } else if (option !== null && typeof option !== 'undefined') {
+            text = String(option);
+          }
+
+          text = typeof text === 'string' ? text.trim() : '';
+
+          if (!text) {
+            return null;
+          }
+
+          return { text: text, correct: !!correct };
+        })
+        .filter(function(option) {
+          return option !== null;
+        });
+
+      var hasCorrect = normalizedChoices.some(function(option) {
+        return option.correct;
+      });
+
+      if (!hasCorrect && trimmedAnswer) {
+        var answerLower = trimmedAnswer.toLowerCase();
+
+        normalizedChoices.some(function(option) {
+          if (option.text.toLowerCase() === answerLower) {
+            option.correct = true;
+            hasCorrect = true;
+            return true;
+          }
+
+          return false;
+        });
+      }
+
+      if (!hasCorrect) {
+        normalizedChoices = [];
+      }
+    }
+
     return {
       question: question.trim(),
-      answer: answer.trim(),
+      answer: trimmedAnswer,
+      choices: normalizedChoices,
     };
   }
 
@@ -265,6 +332,10 @@
 
     target.question = normalized.question;
     target.answer = normalized.answer;
+
+    if (Object.prototype.hasOwnProperty.call(updates || {}, 'choices')) {
+      target.choices = normalized.choices;
+    }
 
     saveToLS();
     return target;
