@@ -113,6 +113,24 @@
             <h2>Control your session </h2>
             <p class="section-sub">Pick a set and decide when to begin or pause your drill.</p>
           </header>
+          <div class="mode-buttons" role="group" aria-label="Study modes">
+            <button
+              type="button"
+              class="secondary-button mode-button"
+              data-mode="flashcard"
+              aria-pressed="true"
+            >
+              Flashcards
+            </button>
+            <button
+              type="button"
+              class="secondary-button mode-button"
+              data-mode="multiple-choice"
+              aria-pressed="false"
+            >
+              Multiple choice
+            </button>
+          </div>
           <div class="session-buttons" role="group" aria-label="Session actions">
             <button id="start-session-button" type="button" class="primary-button">Start session</button>
             <button id="stop-session-button" type="button" class="secondary-button">Stop session </button>

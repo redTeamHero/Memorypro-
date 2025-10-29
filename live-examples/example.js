@@ -49,6 +49,7 @@ async function initializeApp() {
   await ensureDeckLoaded();
   initializeManualEditor();
   bindHandlers();
+  updateModeUI();
   ouicards.getFromLS();
   refreshManualEditorOptions();
   updateFooter();
