@@ -17,19 +17,19 @@
     <main class="app-shell" role="main">
       <header class="hero">
         <span class="hero-badge">Memorypro</span>
-        <h1>Build bilingual mastery, one card at a time.</h1>
-        <p>Tap through spaced-repetition drills that feel as friendly as Duolingo.<br><span class="hero-sub">Practica en inglés y español.</span></p>
+        <h1>Master your memory!</h1>
+        <p>Tap through spaced-repetition drills.<br><span class="hero-sub">.</span></p>
       </header>
 
       <div class="flashcard" aria-live="polite">
         <section class="study-overview">
           <div class="card-section set-manager">
             <header class="section-heading">
-              <h2>Organize your study sets · Organiza tus conjuntos</h2>
+              <h2>Organize your study sets </h2>
               <p class="section-sub">Group decks by class or topic so you can return to them anytime.</p>
             </header>
             <div class="set-fields">
-              <label class="set-label" for="flashcard-set-select">Active set · Conjunto activo</label>
+              <label class="set-label" for="flashcard-set-select">Active set </label>
               <select id="flashcard-set-select" aria-label="Choose flashcard set"></select>
               <div class="new-set-row">
                 <label class="sr-only" for="new-set-name-input">New set name</label>
@@ -39,124 +39,94 @@
                   autocomplete="off"
                   placeholder="Biology 201 · Chapter 3"
                 />
-                <button id="create-set-button" type="button" class="secondary-button">Create set · Crear conjunto</button>
+                <button id="create-set-button" type="button" class="secondary-button">Create set </button>
+
               </div>
             </div>
-            <p class="helper-text">Saving happens automatically after each answer, but you can also save manually below. Los cambios se guardan automáticamente después de cada respuesta.</p>
+            <p class="helper-text">Saving happens automatically after each answer, but you can also save manually below. </p>
           </div>
 
-          <div class="card-section mode-toggle">
-            <header class="section-heading">
-              <h2>Choose a study mode · Elige un modo</h2>
-              <p class="section-sub">Switch between recall practice with flashcards or recognition with multiple choice.</p>
-            </header>
-            <div class="mode-buttons" role="group" aria-label="Study mode">
-              <button type="button" class="mode-button active" data-mode="flashcard">Flashcards</button>
-              <button type="button" class="mode-button" data-mode="multiple-choice">Multiple choice · Opción múltiple</button>
-            </div>
-            <p class="helper-text">College-ready drills designed for long study sessions. Entrena tu memoria con modos flexibles.</p>
-          </div>
+
         </section>
 
-        <section class="card-section session-controls" aria-label="Study session controls">
-          <header class="section-heading">
-            <h2>Control your session · Controla tu sesión</h2>
-            <p class="section-sub">Pick a set and decide when to begin or pause your drill.</p>
-          </header>
-          <div class="session-buttons" role="group" aria-label="Session actions">
-            <button id="start-session-button" type="button" class="primary-button">Start session · Iniciar sesión</button>
-            <button id="stop-session-button" type="button" class="secondary-button">Stop session · Detener sesión</button>
-          </div>
-          <p class="helper-text">Switch sets anytime; your cards stay ready until you press start. Cambia de conjunto en cualquier momento.</p>
-        </section>
 
-        <section class="upload card-section">
-          <div class="section-heading">
-            <h2>Import your deck · Importa tu mazo</h2>
-            <p class="section-sub">Paste “question,answer” pairs or upload a CSV export.</p>
-          </div>
-          <div class="upload-actions">
-            <div class="set-manager">
-              <label class="set-label" for="flashcard-set-select">Flashcard set · Conjunto de tarjetas</label>
-              <div class="set-controls">
-                <select id="flashcard-set-select" aria-label="Choose flashcard set"></select>
-                <button id="create-set-button" type="button" class="secondary-button">New set · Nuevo conjunto</button>
-              </div>
-              <p class="helper-text">Organize decks into sets to switch topics faster. Organiza tus mazos en conjuntos para cambiar de tema más rápido.</p>
-            </div>
-            <label class="upload-questions-label pill-button" role="button" tabindex="0">
-              <span class="label-icon icon-cloud-upload" aria-hidden="true"></span>
-              <span class="label-text">Paste flashcards · Pega tus tarjetas</span>
-            </label>
-            <textarea
-              id="questions-input-area"
-              placeholder="Question,Answer\n¿Cuál es la capital de Texas?,Austin"
-              cols="80"
-              rows="6"
-            ></textarea>
-            <label id="load-questions" class="primary-button" role="button" tabindex="0">Load deck · Cargar mazo</label>
-            <p class="helper-text">Tip: use commas or tabs. One card per line. Consejo: usa comas o tabulaciones. Una tarjeta por línea.</p>
-          </div>
-        </section>
 
         <section class="card-section manual-entry" aria-label="Manual flashcard editor">
           <header class="section-heading">
-            <h2>Create or edit flashcards · Crea o edita tarjetas</h2>
+            <h2>Create or edit flashcards </h2>
             <p class="section-sub">Add new prompts or revise existing ones without leaving the page.</p>
           </header>
           <div class="manual-editor">
-            <label class="set-label" for="manual-card-select">Existing flashcards · Tarjetas existentes</label>
+            <label class="set-label" for="manual-card-select">Existing flashcards </label>
             <select id="manual-card-select" aria-label="Select flashcard to edit">
-              <option value="">Select a card to edit · Selecciona una tarjeta</option>
+              <option value="">Select a card to edit </option>
             </select>
             <div class="manual-fields">
-              <label class="set-label" for="manual-question-input">Question · Pregunta</label>
+              <label class="set-label" for="manual-question-input">Question </label>
               <textarea
                 id="manual-question-input"
                 rows="3"
-                placeholder="Describe the prompt · Describe la pregunta"
+                placeholder="Describe the prompt "
               ></textarea>
-              <label class="set-label" for="manual-answer-input">Answer · Respuesta</label>
+              <label class="set-label" for="manual-answer-input">Answer </label>
               <textarea
                 id="manual-answer-input"
                 rows="3"
-                placeholder="Type the answer · Escribe la respuesta"
+                placeholder="Type the answer "
               ></textarea>
             </div>
             <div class="manual-buttons">
-              <button id="add-flashcard-button" type="button" class="primary-button">Add flashcard · Agregar tarjeta</button>
-              <button id="update-flashcard-button" type="button" class="secondary-button">Update selected · Actualizar seleccionada</button>
+              <button id="add-flashcard-button" type="button" class="primary-button">Add flashcard </button>
+              <button id="update-flashcard-button" type="button" class="secondary-button">Update selected </button>
             </div>
             <p class="helper-text">Leave the selector empty to create a new flashcard. Select one to edit and save your changes.</p>
           </div>
         </section>
 
+
+
+        <section class="card-section session-controls" aria-label="Study session controls">
+          <header class="section-heading">
+            <h2>Control your session </h2>
+            <p class="section-sub">Pick a set and decide when to begin or pause your drill.</p>
+          </header>
+          <div class="session-buttons" role="group" aria-label="Session actions">
+            <button id="start-session-button" type="button" class="primary-button">Start session</button>
+            <button id="stop-session-button" type="button" class="secondary-button">Stop session </button>
+            <button id="focus-button" type="button" class="secondary-button">Deep Focus </button>
+            <audio id="focus-tone" src="junglemix.wav" preload="auto"></audio>
+
+          </div>
+          <p class="helper-text">Switch sets anytime; your cards stay ready until you press start. </p>
+        </section>
+
+
         <section class="card-section question" role="button" tabindex="0" aria-label="Study question">
           <header class="card-meta">
-            <span class="pill accent">Prompt · Pregunta</span>
+            <span class="pill accent">Prompt</span>
           </header>
           <div class="card-content">
-            <p>Tap the card to show instructions. Toca la tarjeta para ver las instrucciones.</p>
+            <p>Tap the card to show instructions.</p>
           </div>
         </section>
 
         <section class="card-section answer" role="button" tabindex="0" aria-label="Study answer">
           <header class="card-meta">
-            <span class="pill">Answer · Respuesta</span>
+            <span class="pill">Answer </span>
           </header>
           <div class="card-content">
-            <p>Upload your comma-separated questions above. Each line becomes a flashcard. Sube tus preguntas separadas por comas arriba. Cada línea se convierte en una tarjeta.</p>
-            <p>Tap anywhere on the question or answer panel to reveal solutions. Presiona la tarjeta para mostrar la respuesta.</p>
+            <p>Upload your comma-separated questions above. Each line becomes a flashcard. </p>
+            <p>Tap anywhere on the question or answer panel to reveal solutions. </p>
             <p>Fun fact: We use the <a href="http://en.wikipedia.org/wiki/Leitner_system" target="_blank" rel="noopener noreferrer">Leitner System</a> to help your memory.</p>
           </div>
         </section>
 
         <section class="card-section multiple-choice-section" aria-live="polite" aria-label="Multiple choice practice">
           <header class="card-meta">
-            <span class="pill">Multiple choice · Opción múltiple</span>
+            <span class="pill">Multiple choice </span>
           </header>
           <div class="card-content">
-            <p>Select the correct answer from the options below. Selecciona la respuesta correcta.</p>
+            <p>Select the correct answer from the options below. </p>
           </div>
           <div id="choice-options" class="choice-options"></div>
           <p id="choice-feedback" class="choice-feedback" aria-live="assertive"></p>
@@ -173,21 +143,9 @@
           </div>
         </section>
 
-        <section class="card-section json-section" aria-label="Flashcard data preview">
-          <header class="section-heading">
-            <h2>Flashcards JSON · Tarjetas en JSON</h2>
-            <p class="section-sub">Review or copy your set in JSON format for safekeeping.</p>
-          </header>
-          <pre id="json-output" class="json-output" tabindex="0"></pre>
-          <div class="json-actions">
-            <button id="copy-json" type="button" class="secondary-button">Copy JSON · Copiar JSON</button>
-            <button id="save-set-button" type="button" class="secondary-button">Save progress · Guardar progreso</button>
-          </div>
-          <p id="json-status" class="helper-text" aria-live="polite"></p>
-        </section>
-
+       
         <footer class="footer">
-          <div class="questions-count">0 cards · tarjetas listas</div>
+          <div class="questions-count">0 cards </div>
           <div class="current-stats">
             <label class="icon-stats" aria-hidden="true"></label>
             <span id="stat-details">0 · 0 · 0</span>
