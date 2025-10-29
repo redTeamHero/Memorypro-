@@ -198,5 +198,15 @@ var myFlashcards = [
   {
     question: "prompt()",
     answer: "Example:\nconst name = prompt('Enter name:');\nconsole.log(name);\n\nExplanation:\nPrompts user for input."
+  },
+  {
+    question: "Which array helper returns the first element that matches a condition?",
+    answer: ".find()",
+    choices: [
+      { text: ".find()", correct: true },
+      { text: ".filter()" },
+      { text: ".map()" },
+      { text: ".reduce()" }
+    ]
   }
 ];

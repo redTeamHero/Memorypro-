@@ -41,6 +41,16 @@
     {
       "question": "How often should the team review dispute outcomes for QA?",
       "answer": "Weekly—flag anomalies, update playbooks, and refresh the deck with new objections."
+    },
+    {
+      "question": "Which Metro-2 status code indicates a consumer account is current?",
+      "answer": "Status Code 11 — Current account in good standing.",
+      "choices": [
+        { "text": "Status Code 11 — Current account in good standing.", "correct": true },
+        { "text": "Status Code 71 — Account 30 days past due." },
+        { "text": "Status Code 80 — Placed for collection." },
+        { "text": "Status Code 97 — Charged off." }
+      ]
     }
   ]
 }
