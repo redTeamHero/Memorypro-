@@ -19,6 +19,7 @@ var domRefs = {
   wrongButtons: null,
   setSelect: null,
   createSetButton: null,
+  newSetNameInput: null,
   multipleChoiceSection: null,
   choiceOptions: null,
   choiceFeedback: null,
@@ -70,6 +71,7 @@ function cacheDom() {
   domRefs.wrongButtons = document.querySelectorAll('.control-button.wrong');
   domRefs.setSelect = document.getElementById('flashcard-set-select');
   domRefs.createSetButton = document.getElementById('create-set-button');
+  domRefs.newSetNameInput = document.getElementById('new-set-name-input');
   domRefs.multipleChoiceSection = document.querySelector('.multiple-choice-section');
   domRefs.choiceOptions = document.getElementById('choice-options');
   domRefs.choiceFeedback = document.getElementById('choice-feedback');
@@ -100,6 +102,15 @@ function initializeSets() {
 
   if (domRefs.createSetButton) {
     attachActivate(domRefs.createSetButton, createNewSet);
+  }
+
+  if (domRefs.newSetNameInput) {
+    domRefs.newSetNameInput.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        createNewSet();
+      }
+    });
   }
 }
 
@@ -315,19 +326,28 @@ function switchToSet(rawName) {
 }
 
 function createNewSet() {
-  if (typeof window === 'undefined' || typeof window.prompt !== 'function') {
-    return;
+  clearStatusMessage();
+
+  var proposedName = domRefs.newSetNameInput && typeof domRefs.newSetNameInput.value === 'string'
+    ? domRefs.newSetNameInput.value
+    : '';
+
+  if (!proposedName && typeof window !== 'undefined' && typeof window.prompt === 'function') {
+    proposedName = window.prompt('Name your new flashcard set · Nombra tu nuevo conjunto de tarjetas') || '';
   }
 
-  var proposedName = window.prompt('Name your new flashcard set · Nombra tu nuevo conjunto de tarjetas');
-
-  if (typeof proposedName !== 'string') {
-    return;
-  }
-
-  var trimmed = proposedName.trim();
+  var trimmed = typeof proposedName === 'string' ? proposedName.trim() : '';
 
   if (trimmed === '') {
+    if (domRefs.newSetNameInput) {
+      domRefs.newSetNameInput.focus();
+    }
+
+    if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+      window.alert('Enter a name before creating a set. Ingresa un nombre antes de crear el conjunto.');
+    }
+
+    setStatusMessage('Enter a name before creating a set. Ingresa un nombre antes de crear el conjunto.', true);
     return;
   }
 
@@ -342,6 +362,10 @@ function createNewSet() {
     }
 
     switchToSet(duplicate);
+    if (domRefs.newSetNameInput) {
+      domRefs.newSetNameInput.value = '';
+    }
+    setStatusMessage('Switched to existing set "' + duplicate + '". Conjunto existente seleccionado.', false);
     return;
   }
 
@@ -353,6 +377,14 @@ function createNewSet() {
   presentCurrentCard();
   updateSessionControls();
   refreshManualEditorOptions();
+  updateJsonPreview();
+
+  if (domRefs.newSetNameInput) {
+    domRefs.newSetNameInput.value = '';
+    domRefs.newSetNameInput.focus();
+  }
+
+  setStatusMessage('Created set "' + trimmed + '". Conjunto creado.', false);
 }
 
 async function ensureDeckLoaded() {
