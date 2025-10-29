@@ -46,6 +46,29 @@
             <p class="helper-text">Saving happens automatically after each answer, but you can also save manually below. </p>
           </div>
 
+          <div class="card-section upload-decks" aria-label="Upload flashcards">
+            <header class="section-heading">
+              <h2>Import flashcards from a file </h2>
+              <p class="section-sub">Paste exported decks or drag in CSV/JSON text to load them instantly.</p>
+            </header>
+            <div class="upload-actions">
+              <button type="button" class="pill-button upload-questions-label">
+                <span class="icon-cloud-upload label-icon" aria-hidden="true"></span>
+                <span>Upload flashcards · Subir tarjetas</span>
+              </button>
+              <label class="sr-only" for="questions-input-area">Paste comma-separated or JSON flashcards</label>
+              <textarea
+                id="questions-input-area"
+                rows="6"
+                placeholder="Question,Answer\n¿Cómo estás?,Estoy bien"
+                aria-label="Flashcard upload input"
+              ></textarea>
+              <button id="load-questions" type="button" class="primary-button">Load cards </button>
+              <p id="json-status" class="helper-text" aria-live="polite"></p>
+            </div>
+            <p class="helper-text">Tip: Each line becomes a card. JSON arrays with "question" and "answer" fields are supported too.</p>
+          </div>
+
 
         </section>
 
