@@ -1,2 +1,4 @@
 Flask==3.0.2
 flask-cors==4.0.0
+requests==2.32.3
+pypdf==4.2.0
