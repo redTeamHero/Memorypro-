@@ -3,8 +3,7 @@ import re
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-from uuid import uuid4
+from typing import Any, Dict, List, Optional
 
 import requests
 from flask import Flask, jsonify, request, send_from_directory
@@ -19,9 +18,6 @@ PROGRESS_FILE = DATA_DIR / "progress.json"
 
 GOOGLE_BOOKS_SEARCH_URL = "https://www.googleapis.com/books/v1/volumes"
 GOOGLE_BOOKS_DEFAULT_LIMIT = 5
-OPEN_LIBRARY_SEARCH_URL = "https://openlibrary.org/search.json"
-OPEN_LIBRARY_WORKS_URL = "https://openlibrary.org"
-UPLOAD_MAX_CANDIDATES = 12
 HTTP_TIMEOUT_SECONDS = 12
 KEYWORD_STOPWORDS = {
     "about",
@@ -125,36 +121,62 @@ def extract_keywords(text: str, limit: int = 6) -> List[str]:
     return keywords
 
 
+def google_books_search(query: str, max_results: int = GOOGLE_BOOKS_DEFAULT_LIMIT) -> List[Dict[str, Any]]:
+    params = {"q": query, "maxResults": max_results}
+    response = requests.get(GOOGLE_BOOKS_SEARCH_URL, params=params, timeout=HTTP_TIMEOUT_SECONDS)
+    response.raise_for_status()
+    payload = response.json()
+    items = payload.get("items", []) if isinstance(payload, dict) else []
+
+    results: List[Dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        volume_id = item.get("id")
+        volume_info = item.get("volumeInfo") or {}
+
+        if not volume_id or not isinstance(volume_info, dict):
+            continue
+
+        title = normalize_text(volume_info.get("title"))
+        if not title:
+            continue
+
+        results.append(
+            {
+                "id": volume_id,
+                "title": title,
+                "authors": [normalize_text(author) for author in volume_info.get("authors", []) if normalize_text(author)],
+                "publishedDate": normalize_text(volume_info.get("publishedDate")),
+                "description": normalize_text(volume_info.get("description")),
+                "pageCount": volume_info.get("pageCount"),
+                "categories": [
+                    normalize_text(category)
+                    for category in volume_info.get("categories", [])
+                    if normalize_text(category)
+                ],
+                "thumbnail": (volume_info.get("imageLinks") or {}).get("thumbnail"),
+                "infoLink": volume_info.get("infoLink"),
+            }
+        )
+
+    return results
+
+
+def fetch_volume_details(volume_id: str) -> Dict[str, Any]:
+    response = requests.get(
+        f"{GOOGLE_BOOKS_SEARCH_URL}/{volume_id}",
+        params={"projection": "full"},
+        timeout=HTTP_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    data = response.json()
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
 def build_chapter_outline(volume_info: Dict[str, Any], limit: int = 7) -> List[Dict[str, Any]]:
-    table_of_contents = volume_info.get("table_of_contents")
-    if isinstance(table_of_contents, list):
-        chapters: List[Dict[str, Any]] = []
-
-        for index, entry in enumerate(table_of_contents[:limit], start=1):
-            if isinstance(entry, dict):
-                title_candidate = (
-                    entry.get("title")
-                    or entry.get("label")
-                    or entry.get("pagenum")
-                    or entry.get("short_title")
-                    or "Section"
-                )
-                summary_source = entry.get("summary") or entry.get("content")
-            else:
-                title_candidate = entry
-                summary_source = None
-
-            resolved_title = keyword_to_title(str(title_candidate)) or f"Section {index}"
-            summary_text = normalize_text(summary_source)
-
-            if not summary_text:
-                summary_text = f"{resolved_title} expands on themes explored in {normalize_text(volume_info.get('title')) or 'the textbook'}."
-
-            chapters.append({"index": index, "title": resolved_title, "summary": summary_text})
-
-        if chapters:
-            return chapters
-
     description = normalize_text(volume_info.get("description"))
     book_title = normalize_text(volume_info.get("title")) or "the textbook"
 
@@ -303,239 +325,6 @@ def generate_flashcards(
     return filtered_cards
 
 
-def google_books_search(query: str, max_results: int = GOOGLE_BOOKS_DEFAULT_LIMIT) -> List[Dict[str, Any]]:
-    params = {"q": query, "maxResults": max_results}
-    response = requests.get(GOOGLE_BOOKS_SEARCH_URL, params=params, timeout=HTTP_TIMEOUT_SECONDS)
-    response.raise_for_status()
-    payload = response.json()
-    items = payload.get("items", []) if isinstance(payload, dict) else []
-
-    results: List[Dict[str, Any]] = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        volume_id = item.get("id")
-        volume_info = item.get("volumeInfo") or {}
-
-        if not volume_id or not isinstance(volume_info, dict):
-            continue
-
-        title = normalize_text(volume_info.get("title"))
-        if not title:
-            continue
-
-        results.append(
-            {
-                "source": "google_books",
-                "id": volume_id,
-                "title": title,
-                "authors": [
-                    normalize_text(author)
-                    for author in volume_info.get("authors", [])
-                    if normalize_text(author)
-                ],
-                "publishedDate": normalize_text(volume_info.get("publishedDate")),
-                "description": normalize_text(volume_info.get("description")),
-                "pageCount": volume_info.get("pageCount"),
-                "categories": [
-                    normalize_text(category)
-                    for category in volume_info.get("categories", [])
-                    if normalize_text(category)
-                ],
-                "thumbnail": (volume_info.get("imageLinks") or {}).get("thumbnail"),
-                "infoLink": volume_info.get("infoLink"),
-            }
-        )
-
-    return results
-
-
-def open_library_search(query: str, max_results: int = GOOGLE_BOOKS_DEFAULT_LIMIT) -> List[Dict[str, Any]]:
-    params = {"q": query, "limit": max_results}
-    response = requests.get(OPEN_LIBRARY_SEARCH_URL, params=params, timeout=HTTP_TIMEOUT_SECONDS)
-    response.raise_for_status()
-    data = response.json()
-    docs = data.get("docs") if isinstance(data, dict) else None
-
-    if not isinstance(docs, list):
-        return []
-
-    results: List[Dict[str, Any]] = []
-    for entry in docs:
-        if not isinstance(entry, dict):
-            continue
-
-        work_key = entry.get("key")
-        title = normalize_text(entry.get("title"))
-        if not work_key or not title:
-            continue
-
-        authors = [normalize_text(name) for name in entry.get("author_name", []) if normalize_text(name)]
-        description = normalize_text(entry.get("subtitle")) or normalize_text(entry.get("first_sentence"))
-        publish_year = entry.get("first_publish_year")
-        subjects = [normalize_text(subject) for subject in entry.get("subject", []) if normalize_text(subject)]
-
-        results.append(
-            {
-                "source": "open_library",
-                "id": work_key,
-                "title": title,
-                "authors": authors,
-                "publishedDate": str(publish_year) if publish_year else "",
-                "description": description,
-                "categories": subjects,
-                "infoLink": f"{OPEN_LIBRARY_WORKS_URL}{work_key}",
-            }
-        )
-
-    return results
-
-
-def fetch_volume_details(volume_id: str) -> Dict[str, Any]:
-    response = requests.get(
-        f"{GOOGLE_BOOKS_SEARCH_URL}/{volume_id}",
-        params={"projection": "full"},
-        timeout=HTTP_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    data = response.json()
-    if not isinstance(data, dict):
-        return {}
-    return data
-
-
-def fetch_open_library_details(work_key: str) -> Dict[str, Any]:
-    normalized_key = work_key if work_key.startswith("/") else f"/{work_key}"
-    response = requests.get(
-        f"{OPEN_LIBRARY_WORKS_URL}{normalized_key}.json",
-        timeout=HTTP_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    if not isinstance(payload, dict):
-        return {}
-    return payload
-
-
-def _normalize_open_library_description(payload: Dict[str, Any]) -> str:
-    description = payload.get("description")
-    if isinstance(description, dict):
-        return normalize_text(description.get("value"))
-    return normalize_text(description)
-
-
-def _normalize_open_library_categories(payload: Dict[str, Any]) -> List[str]:
-    subjects = payload.get("subjects")
-    if not isinstance(subjects, list):
-        return []
-    return [normalize_text(subject) for subject in subjects if normalize_text(subject)]
-
-
-def read_uploaded_text(file_storage: Any) -> Tuple[str, str]:
-    filename = normalize_text(getattr(file_storage, "filename", "")) or f"upload-{uuid4().hex}"
-    suffix = Path(filename).suffix.lower()
-
-    file_storage.stream.seek(0)
-
-    if suffix == ".pdf":
-        try:
-            reader = PdfReader(file_storage.stream)
-        except Exception as exc:  # pragma: no cover - parser variability
-            raise ValueError("Unable to read the uploaded PDF.") from exc
-
-        text_fragments: List[str] = []
-        for page in reader.pages:
-            try:
-                extracted = page.extract_text() or ""
-            except Exception:  # pragma: no cover - parser variability
-                extracted = ""
-            text_fragments.append(extracted)
-        content = "\n".join(fragment for fragment in text_fragments if fragment)
-    else:
-        raw_bytes = file_storage.stream.read()
-        try:
-            content = raw_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            content = raw_bytes.decode("latin-1", errors="ignore")
-
-    file_storage.stream.seek(0)
-
-    normalized_lines = content.replace("\r\n", "\n").replace("\r", "\n").strip()
-    return filename, normalized_lines
-
-
-def derive_outline_from_text(text: str, limit: int = 7) -> List[Dict[str, Any]]:
-    if not text:
-        return []
-
-    lines = [normalize_text(line) for line in text.splitlines()]
-    headings: List[Tuple[str, str]] = []
-
-    def is_heading(value: str) -> bool:
-        if not value or len(value) < 5:
-            return False
-        lower_value = value.lower()
-        if re.match(r"^(chapter|unit|lesson|section|module|part)\s+\d+", lower_value):
-            return True
-        if re.match(r"^\d+(\.\d+)*\s+[A-Za-z]", value):
-            return True
-        if lower_value.isupper() and len(lower_value.split()) <= 8:
-            return True
-        return False
-
-    def clean_heading(value: str) -> str:
-        stripped = re.sub(r"^(chapter|unit|lesson|section|module|part)\s+\d+[:.\-]?\s*", "", value, flags=re.IGNORECASE)
-        stripped = re.sub(r"^\d+(\.\d+)*\s+", "", stripped)
-        return keyword_to_title(stripped) or keyword_to_title(value)
-
-    for idx, line in enumerate(lines):
-        if not is_heading(line):
-            continue
-
-        summary_chunks: List[str] = []
-        for offset in range(1, 6):
-            if idx + offset >= len(lines):
-                break
-            candidate = lines[idx + offset]
-            if not candidate:
-                continue
-            if is_heading(candidate):
-                break
-            summary_chunks.append(candidate)
-            if len(summary_chunks) >= 2:
-                break
-
-        summary = normalize_text(" ".join(summary_chunks))
-        if not summary:
-            summary = f"{clean_heading(line)} introduces a key idea in the uploaded material."
-
-        headings.append((clean_heading(line), summary))
-        if len(headings) >= UPLOAD_MAX_CANDIDATES:
-            break
-
-    if not headings:
-        sentences = sentence_split(text)
-        if not sentences:
-            return []
-        return [
-            {"index": idx + 1, "title": f"Key Idea {idx + 1}", "summary": sentence}
-            for idx, sentence in enumerate(sentences[:limit])
-        ]
-
-    chapters = [
-        {"index": idx + 1, "title": title, "summary": summary}
-        for idx, (title, summary) in enumerate(headings[:limit])
-    ]
-    return chapters
-
-
-def summarize_uploaded_text(text: str) -> str:
-    sentences = sentence_split(text)
-    if not sentences:
-        return ""
-    return " ".join(sentences[:3])
-
-
 @app.route("/")
 def serve_index() -> Any:
     return send_from_directory(app.static_folder, "index.html")
@@ -557,32 +346,16 @@ def search_textbooks() -> Any:
             400,
         )
 
-    results: List[Dict[str, Any]] = []
-    warnings: List[str] = []
-
     try:
-        results.extend(google_books_search(query))
+        results = google_books_search(query)
     except requests.RequestException as exc:  # pragma: no cover - network failure handling
         app.logger.warning("Google Books search failed", exc_info=exc)
-        warnings.append("GoogleBooksUnavailable")
-
-    try:
-        results.extend(open_library_search(query))
-    except requests.RequestException as exc:  # pragma: no cover - network failure handling
-        app.logger.warning("Open Library search failed", exc_info=exc)
-        warnings.append("OpenLibraryUnavailable")
-
-    if not results and warnings:
         return (
-            jsonify({"error": "SearchFailed", "message": "No catalog services were reachable."}),
+            jsonify({"error": "SearchFailed", "message": "Unable to reach the Google Books service."}),
             502,
         )
 
-    payload: Dict[str, Any] = {"results": results}
-    if warnings:
-        payload["warnings"] = warnings
-
-    return jsonify(payload)
+    return jsonify({"results": results})
 
 
 @app.route("/api/textbooks/<volume_id>/chapters", methods=["GET"])
@@ -593,58 +366,6 @@ def get_textbook_chapters(volume_id: str) -> Any:
             jsonify({"error": "InvalidVolume", "message": "A valid volume identifier is required."}),
             400,
         )
-
-    source = normalize_text(request.args.get("source")) or "google_books"
-
-    if source == "open_library":
-        try:
-            work_payload = fetch_open_library_details(resolved_id)
-        except requests.HTTPError as exc:  # pragma: no cover - dependent on external API
-            status_code = exc.response.status_code if exc.response is not None else 502
-            app.logger.warning("Open Library work lookup failed", exc_info=exc)
-            return (
-                jsonify({"error": "VolumeLookupFailed", "message": "Unable to retrieve textbook details."}),
-                status_code if 400 <= status_code < 600 else 502,
-            )
-        except requests.RequestException as exc:  # pragma: no cover - dependent on external API
-            app.logger.warning("Open Library work lookup failed", exc_info=exc)
-            return (
-                jsonify({"error": "VolumeLookupFailed", "message": "Unable to retrieve textbook details."}),
-                502,
-            )
-
-        volume_info: Dict[str, Any] = {
-            "title": normalize_text(work_payload.get("title")) or resolved_id,
-            "description": _normalize_open_library_description(work_payload),
-            "categories": _normalize_open_library_categories(work_payload),
-            "table_of_contents": work_payload.get("table_of_contents"),
-        }
-
-        chapters = build_chapter_outline(volume_info)
-
-        published_date = normalize_text(work_payload.get("first_publish_date"))
-        if not published_date:
-            created = work_payload.get("created")
-            if isinstance(created, dict):
-                published_date = normalize_text(created.get("value"))
-
-        book_info: Dict[str, Any] = {
-            "id": resolved_id,
-            "title": volume_info["title"],
-            "description": volume_info.get("description"),
-            "infoLink": f"{OPEN_LIBRARY_WORKS_URL}{resolved_id}",
-            "publishedDate": published_date,
-        }
-
-        categories = volume_info.get("categories") or []
-        if categories:
-            book_info["categories"] = categories
-
-        page_count = work_payload.get("number_of_pages")
-        if page_count:
-            book_info["pageCount"] = page_count
-
-        return jsonify({"book": book_info, "chapters": chapters})
 
     try:
         volume_payload = fetch_volume_details(resolved_id)
@@ -680,11 +401,6 @@ def get_textbook_chapters(volume_id: str) -> Any:
         "infoLink": volume_info.get("infoLink"),
         "pageCount": volume_info.get("pageCount"),
         "publishedDate": normalize_text(volume_info.get("publishedDate")),
-        "categories": [
-            normalize_text(category)
-            for category in volume_info.get("categories", [])
-            if normalize_text(category)
-        ],
     }
 
     return jsonify({"book": book_info, "chapters": chapters})
@@ -731,70 +447,6 @@ def create_textbook_flashcards() -> Any:
             },
         }
     )
-
-
-@app.route("/api/textbooks/upload", methods=["POST"])
-def upload_textbook_outline() -> Any:
-    if "file" not in request.files:
-        return (
-            jsonify({"error": "MissingFile", "message": "Upload a PDF, text, or markdown file to analyze."}),
-            400,
-        )
-
-    uploaded = request.files["file"]
-
-    if not uploaded or not uploaded.filename:
-        return (
-            jsonify({"error": "MissingFile", "message": "Upload a PDF, text, or markdown file to analyze."}),
-            400,
-        )
-
-    title_hint = normalize_text(
-        request.form.get("title")
-        or request.form.get("bookTitle")
-        or request.args.get("title")
-    )
-
-    try:
-        filename, content = read_uploaded_text(uploaded)
-    except ValueError as exc:
-        return (
-            jsonify({"error": "UploadUnreadable", "message": str(exc) or "Unable to read the uploaded file."}),
-            400,
-        )
-
-    if not content:
-        return (
-            jsonify({"error": "UploadEmpty", "message": "The uploaded file did not contain any text."}),
-            400,
-        )
-
-    chapters = derive_outline_from_text(content)
-    if not chapters:
-        fallback_summary = summarize_uploaded_text(content) or "Review the uploaded material to outline chapters manually."
-        chapters = [
-            {
-                "index": 1,
-                "title": "Overview",
-                "summary": fallback_summary,
-            }
-        ]
-
-    description = summarize_uploaded_text(content)
-    resolved_title = title_hint or keyword_to_title(Path(filename).stem)
-    if not resolved_title:
-        resolved_title = "Uploaded Textbook"
-
-    book_id = f"upload-{uuid4().hex}"
-    book_payload = {
-        "id": book_id,
-        "title": resolved_title,
-        "description": description,
-        "source": "upload",
-        "filename": filename,
-    }
-
-    return jsonify({"source": "upload", "book": book_payload, "chapters": chapters})
 
 
 @app.route("/api/progress", methods=["GET"])

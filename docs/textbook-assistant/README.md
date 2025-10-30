@@ -1,25 +1,24 @@
 # Textbook Assistant Guide
 
-This guide explains how to use the multi-source textbook workflow that was added to Memorypro. The flow lets you search Google Books and Open Library, upload your own PDFs or text files, pick a chapter outline, and auto-generate flashcards that can be imported straight into your active deck.【F:backend/app.py†L332-L371】【F:backend/app.py†L508-L552】
+This guide explains how to use the Google Books–powered textbook workflow that was added to Memorypro. The flow lets you search for a book, pick a chapter outline, and auto-generate flashcards that can be imported straight into your active deck.
 
 ## Feature Overview
 
-The assistant consists of four core capabilities:
+The assistant consists of three core capabilities:
 
-1. **Textbook search.** A `/api/textbooks/search` endpoint fans out to Google Books and Open Library so learners see results from both catalogs in one list, and it reports warnings if a source is temporarily unavailable.【F:backend/app.py†L332-L371】
-2. **Chapter outline synthesis.** Once you choose a volume, `/api/textbooks/<volume_id>/chapters` inspects Google Books descriptions, Open Library tables of contents, or uploaded text to build a concise chapter list.【F:backend/app.py†L180-L330】【F:backend/app.py†L373-L462】
-3. **Flashcard generation.** A POST to `/api/textbooks/flashcards` turns the selected chapter summary into up to six study-ready question/answer pairs that can be previewed and imported on the client.【F:backend/app.py†L464-L506】
-4. **Upload analysis.** Learners can upload their own PDF, TXT, or Markdown files via `/api/textbooks/upload`; the backend extracts headings to synthesize a chapter outline when public catalogs are insufficient.【F:backend/app.py†L208-L330】【F:backend/app.py†L508-L552】
+1. **Textbook search.** A `/api/textbooks/search` endpoint proxies Google Books queries and returns lightweight metadata for the top results so learners can pick the right title quickly.【F:backend/app.py†L338-L359】
+2. **Chapter outline synthesis.** Once you choose a volume, `/api/textbooks/<volume_id>/chapters` constructs a concise chapter list by inspecting Google Books descriptions and category data.【F:backend/app.py†L360-L409】
+3. **Flashcard generation.** A POST to `/api/textbooks/flashcards` turns the selected chapter summary into up to six study-ready question/answer pairs that can be previewed and imported on the client.【F:backend/app.py†L408-L451】
 
-On the client (`live-examples/index.html` + `example.js`), the "Generate flashcards from a textbook" panel orchestrates the complete flow: search or upload, chapter selection, preview, and import into the chosen study set.【F:live-examples/index.html†L53-L116】【F:live-examples/example.js†L1-L140】
+On the client (`live-examples/index.html` + `example.js`), the "Generate flashcards from a textbook" panel orchestrates the complete flow: search, chapter selection, preview, and import into the chosen study set.【F:live-examples/index.html†L53-L111】【F:live-examples/example.js†L1-L120】
 
 ## Prerequisites
 
 - Python 3.9 or newer
-- `pip` for installing the backend dependencies (`requests`, `pypdf`)
-- An internet connection so the server can reach Google Books and Open Library
+- `pip` for installing the backend dependency (`requests`)
+- An internet connection so the server can reach the Google Books API
 
-> **Note:** Google Books requests do not require an API key for low-volume usage. If you plan to exceed the default quota, register a key and pass it via the standard `key` query parameter (edit `google_books_search` accordingly).【F:backend/app.py†L306-L350】
+> **Note:** Google Books requests do not require an API key for low-volume usage. If you plan to exceed the default quota, register a key and pass it via the standard `key` query parameter (edit `google_books_search` accordingly).【F:backend/app.py†L200-L259】
 
 ## Backend Setup
 
@@ -42,45 +41,39 @@ All textbook endpoints live under `/api/textbooks/*` and are CORS-enabled so the
    ```bash
    python3 -m http.server 8000
    ```
-2. Open `http://localhost:8000/live-examples/index.html` in your browser. The new "AI textbook assistant" card sits near the top of the dashboard.【F:live-examples/index.html†L79-L112】
-3. Enter a textbook title or topic and optionally attach a PDF/TXT before clicking **Search textbooks**. Results from Google Books, Open Library, and any analyzed upload appear together with source badges and catalog warnings when a provider is offline.【F:live-examples/index.html†L79-L112】【F:live-examples/example.js†L729-L881】【F:live-examples/example.js†L1262-L1344】
-4. Click **Choose book** on a catalog entry or the uploaded file to fetch synthesized chapter headings. Selecting one triggers flashcard generation and renders a preview list with an **Import to active set** action.【F:live-examples/example.js†L1020-L1199】
-5. Press **Import to active set** to merge the generated cards into whichever deck is currently active in the set manager controls.【F:live-examples/example.js†L1236-L1306】
+2. Open `http://localhost:8000/live-examples/index.html` in your browser. The new "AI textbook assistant" card sits near the top of the dashboard.【F:live-examples/index.html†L53-L111】
+3. Enter a textbook title or topic, then click **Search textbooks**. Results stream into the panel with titles, authors, and a **Preview outline** button for each.【F:live-examples/example.js†L121-L220】
+4. Click **Preview outline** on a result to fetch synthesized chapter headings. Selecting one triggers flashcard generation and renders a preview list with an **Import to active set** action.【F:live-examples/example.js†L221-L400】
+5. Press **Import to active set** to merge the generated cards into whichever deck is currently active in the set manager controls.【F:live-examples/example.js†L401-L520】
 
 ## API Reference
 
 ### `GET /api/textbooks/search`
 - **Query parameters:** `q` (required) – the textbook title, author, or topic.
-- **Response:** `{ "results": [ { "source", "id", "title", ... } ], "warnings": ["GoogleBooksUnavailable", ...] }`
-- **Error cases:** `400` when no query is supplied; `502` when both catalogs are unreachable.【F:backend/app.py†L332-L371】
+- **Response:** `{ "results": [ { "id", "title", "authors", ... } ] }`
+- **Error cases:** `400` when no query is supplied; `502` when the Google Books service cannot be reached.【F:backend/app.py†L338-L359】
 
 ### `GET /api/textbooks/<volume_id>/chapters`
-- **Path parameter:** `volume_id` – the catalog identifier chosen from the search results.
-- **Query parameter:** `source` – set to `open_library` when requesting chapters from that catalog.
+- **Path parameter:** `volume_id` – the Google Books volume identifier chosen from the search results.
 - **Response:** `{ "book": {...}, "chapters": [ { "index", "title", "summary" }, ... ] }`
-- **Error cases:** `400` for a blank or malformed identifier; `4xx/5xx` proxying the upstream catalog.【F:backend/app.py†L373-L462】
+- **Error cases:** `400` for a blank or malformed identifier; `4xx/5xx` proxying Google Books failures.【F:backend/app.py†L360-L409】
 
 ### `POST /api/textbooks/flashcards`
 - **Body:** JSON with `bookTitle`, `chapterTitle`, and optionally `chapterSummary` / `chapterIndex`.
 - **Response:** `{ "flashcards": [ { "question", "answer" }, ... ], "metadata": {...} }`
-- **Error cases:** `400` if either the book or chapter title is missing.【F:backend/app.py†L464-L506】
+- **Error cases:** `400` if either the book or chapter title is missing.【F:backend/app.py†L408-L451】
 
-### `POST /api/textbooks/upload`
-- **Body:** `multipart/form-data` with a `file` field (PDF/TXT/MD) and optional `title` override.
-- **Response:** `{ "source": "upload", "book": {...}, "chapters": [...] }`
-- **Error cases:** `400` if the file is missing, unreadable, or empty.【F:backend/app.py†L508-L552】
-
-Each flashcard set balances overview, linkage to the larger book, supporting details, terminology, and application prompts. The heuristics combine sentence splitting with keyword extraction to stay on topic even with short summaries.【F:backend/app.py†L180-L330】
+Each flashcard set balances overview, linkage to the larger book, supporting details, terminology, and application prompts. The heuristics combine sentence splitting with keyword extraction to stay on topic even with short summaries.【F:backend/app.py†L180-L319】
 
 ## Data Persistence
 
-- Deck changes and generated cards are merged into the in-memory OuiCards store on the client and saved to `localStorage` just like manually edited cards.【F:live-examples/example.js†L1224-L1259】
-- Study-session progress events are posted back to `/api/progress`, which snapshots recent interactions in `backend/data/progress.json` for analytics or debugging.【F:backend/app.py†L800-L821】
+- Deck changes and generated cards are merged into the in-memory OuiCards store on the client and saved to `localStorage` just like manually edited cards.【F:live-examples/example.js†L401-L520】
+- Study-session progress events are posted back to `/api/progress`, which snapshots recent interactions in `backend/data/progress.json` for analytics or debugging.【F:backend/app.py†L451-L483】
 
 ## Troubleshooting
 
-- **Empty results:** Try broadening the search term; each catalog returns only its top matches, and warnings indicate when a provider was unreachable.【F:backend/app.py†L332-L371】【F:live-examples/example.js†L807-L902】
-- **No chapters generated:** Some catalog entries lack descriptions. The server falls back to subject categories or uploaded headings; you can still provide your own summary before generating flashcards.【F:backend/app.py†L180-L330】
-- **Import button disabled:** Ensure a study set is selected in the "Organize your study sets" control. Generated cards append to the active set only when one is active.【F:live-examples/index.html†L24-L63】【F:live-examples/example.js†L1160-L1306】
+- **Empty results:** Try broadening the search term; the server only returns the top five Google Books matches by default.【F:backend/app.py†L200-L259】
+- **No chapters generated:** Some Google Books entries lack descriptions. The server falls back to using subject categories; if none exist, you may need to write a short summary manually before generating flashcards.【F:backend/app.py†L180-L239】
+- **Import button disabled:** Ensure a study set is selected in the "Organize your study sets" control. Generated cards append to the active set only when one is active.【F:live-examples/index.html†L24-L63】【F:live-examples/example.js†L401-L520】
 
 Happy studying!
