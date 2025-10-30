@@ -66,6 +66,7 @@ async function initializeApp() {
   await ensureDeckLoaded();
   initializeManualEditor();
   bindHandlers();
+  handleTextbookUploadChange();
   updateModeUI();
   ouicards.getFromLS();
   refreshManualEditorOptions();

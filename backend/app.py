@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 import requests
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
+from pypdf import PdfReader
 
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = (BASE_DIR.parent / "live-examples").resolve()
