@@ -481,11 +481,6 @@
           continue;
         }
 
-        if (stringDelimiter === "'" && char === '"') {
-          result += '\\"';
-          continue;
-        }
-
         if (char === '\n') {
           result += '\\n';
           continue;
