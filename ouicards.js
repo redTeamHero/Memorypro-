@@ -650,6 +650,123 @@
     };
   }
 
+  function renameSet(currentName, newName) {
+    var proposed = typeof newName === 'string' ? newName.trim() : '';
+
+    if (proposed === '') {
+      return { error: 'invalidName', activeSet: ouicards.activeSet, sets: listSets() };
+    }
+
+    var storage = safeLocalStorage();
+    var sanitizedCurrent = typeof currentName === 'string' && currentName.trim() !== ''
+      ? sanitizeSetName(currentName)
+      : sanitizeSetName(ouicards.activeSet);
+    var sanitizedTarget = sanitizeSetName(proposed);
+
+    if (!storage) {
+      var sameName = sanitizedTarget.toLowerCase() === sanitizedCurrent.toLowerCase();
+      ouicards.activeSet = sanitizedTarget;
+      return {
+        activeSet: ouicards.activeSet,
+        sets: [ouicards.activeSet],
+        renamed: !sameName,
+      };
+    }
+
+    var payload = readStoragePayload(storage);
+    var sourceName = sanitizedCurrent || getActiveSetName(payload);
+    var existingSet = payload.sets[sourceName];
+
+    if (!existingSet) {
+      if (sourceName === DEFAULT_SET_NAME && Object.keys(payload.sets).length === 0) {
+        payload.sets[sourceName] = emptySetState();
+        existingSet = payload.sets[sourceName];
+      } else {
+        return { error: 'missing', activeSet: payload.activeSet, sets: Object.keys(payload.sets) };
+      }
+    }
+
+    var duplicate = Object.keys(payload.sets).find(function(name) {
+      return name.toLowerCase() === sanitizedTarget.toLowerCase() && name !== sourceName;
+    });
+
+    if (duplicate) {
+      return { error: 'duplicate', activeSet: payload.activeSet, sets: Object.keys(payload.sets) };
+    }
+
+    if (sanitizedTarget === sourceName) {
+      payload.activeSet = sourceName;
+      ouicards.activeSet = sourceName;
+      writeStoragePayload(storage, payload);
+      loadSetIntoState(existingSet);
+      return { activeSet: sourceName, sets: Object.keys(payload.sets), renamed: false };
+    }
+
+    payload.sets[sanitizedTarget] = existingSet;
+    delete payload.sets[sourceName];
+
+    if (payload.activeSet === sourceName) {
+      payload.activeSet = sanitizedTarget;
+    }
+
+    ouicards.activeSet = payload.activeSet;
+    writeStoragePayload(storage, payload);
+    loadSetIntoState(payload.sets[payload.activeSet]);
+
+    return {
+      activeSet: payload.activeSet,
+      sets: Object.keys(payload.sets),
+      renamed: true,
+      previousName: sourceName,
+    };
+  }
+
+  function deleteSet(name) {
+    var storage = safeLocalStorage();
+
+    if (!storage) {
+      return { error: 'storageUnavailable', activeSet: ouicards.activeSet, sets: listSets() };
+    }
+
+    var payload = readStoragePayload(storage);
+    var targetName = typeof name === 'string' && name.trim() !== ''
+      ? sanitizeSetName(name)
+      : getActiveSetName(payload);
+
+    if (!payload.sets[targetName]) {
+      return { error: 'missing', activeSet: payload.activeSet, sets: Object.keys(payload.sets) };
+    }
+
+    var setNames = Object.keys(payload.sets);
+
+    if (setNames.length <= 1) {
+      return { error: 'lastSet', activeSet: payload.activeSet, sets: setNames };
+    }
+
+    delete payload.sets[targetName];
+
+    var remainingNames = Object.keys(payload.sets);
+
+    if (!payload.activeSet || payload.activeSet === targetName || !payload.sets[payload.activeSet]) {
+      payload.activeSet = remainingNames[0] || DEFAULT_SET_NAME;
+    }
+
+    ouicards.activeSet = payload.activeSet;
+    writeStoragePayload(storage, payload);
+
+    var activeState = payload.sets[payload.activeSet];
+
+    if (!activeState) {
+      activeState = emptySetState();
+      payload.sets[payload.activeSet] = activeState;
+      writeStoragePayload(storage, payload);
+    }
+
+    loadSetIntoState(activeState);
+
+    return { activeSet: payload.activeSet, sets: remainingNames, removed: targetName };
+  }
+
   function listSets() {
     var storage = safeLocalStorage();
 
@@ -725,6 +842,8 @@
     getFromLS:          getFromLS,
     resetBuckets:       resetBuckets,
     useSet:             useSet,
+    renameSet:          renameSet,
+    deleteSet:          deleteSet,
     listSets:           listSets,
     getActiveSet:       getActiveSet,
     hasStoredFlashcards: hasStoredFlashcards,

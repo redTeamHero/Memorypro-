@@ -30,7 +30,13 @@
             </header>
             <div class="set-fields">
               <label class="set-label" for="flashcard-set-select">Active set </label>
-              <select id="flashcard-set-select" aria-label="Choose flashcard set"></select>
+              <div class="set-controls">
+                <select id="flashcard-set-select" aria-label="Choose flashcard set"></select>
+                <div class="set-action-buttons" role="group" aria-label="Manage active set">
+                  <button id="rename-set-button" type="button" class="secondary-button">Edit name </button>
+                  <button id="delete-set-button" type="button" class="danger-button">Remove set </button>
+                </div>
+              </div>
               <div class="new-set-row">
                 <label class="sr-only" for="new-set-name-input">New set name</label>
                 <input
@@ -39,7 +45,7 @@
                   autocomplete="off"
                   placeholder="Biology 201 · Chapter 3"
                 />
-                <button id="create-set-button" type="button" class="secondary-button">Create set </button>
+                <button id="create-set-button" type="button" class="secondary-button">Add set </button>
 
               </div>
             </div>

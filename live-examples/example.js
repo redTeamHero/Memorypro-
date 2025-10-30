@@ -19,6 +19,8 @@ var domRefs = {
   wrongButtons: null,
   setSelect: null,
   createSetButton: null,
+  renameSetButton: null,
+  deleteSetButton: null,
   newSetNameInput: null,
   multipleChoiceSection: null,
   choiceOptions: null,
@@ -72,6 +74,8 @@ function cacheDom() {
   domRefs.wrongButtons = document.querySelectorAll('.control-button.wrong');
   domRefs.setSelect = document.getElementById('flashcard-set-select');
   domRefs.createSetButton = document.getElementById('create-set-button');
+  domRefs.renameSetButton = document.getElementById('rename-set-button');
+  domRefs.deleteSetButton = document.getElementById('delete-set-button');
   domRefs.newSetNameInput = document.getElementById('new-set-name-input');
   domRefs.multipleChoiceSection = document.querySelector('.multiple-choice-section');
   domRefs.choiceOptions = document.getElementById('choice-options');
@@ -103,6 +107,14 @@ function initializeSets() {
 
   if (domRefs.createSetButton) {
     attachActivate(domRefs.createSetButton, createNewSet);
+  }
+
+  if (domRefs.renameSetButton) {
+    attachActivate(domRefs.renameSetButton, renameActiveSet);
+  }
+
+  if (domRefs.deleteSetButton) {
+    attachActivate(domRefs.deleteSetButton, deleteActiveSet);
   }
 
   if (domRefs.newSetNameInput) {
@@ -175,6 +187,14 @@ function populateSetOptions(setList, activeSetName) {
   });
 
   domRefs.setSelect.value = resolvedActiveSet;
+
+  if (domRefs.renameSetButton) {
+    domRefs.renameSetButton.disabled = availableSets.length === 0;
+  }
+
+  if (domRefs.deleteSetButton) {
+    domRefs.deleteSetButton.disabled = availableSets.length <= 1;
+  }
 }
 
 function refreshManualEditorOptions(options) {
@@ -326,6 +346,18 @@ function switchToSet(rawName) {
   refreshManualEditorOptions();
 }
 
+function getSelectedSetName() {
+  if (domRefs.setSelect && typeof domRefs.setSelect.value === 'string' && domRefs.setSelect.value.trim() !== '') {
+    return domRefs.setSelect.value.trim();
+  }
+
+  if (typeof ouicards.getActiveSet === 'function') {
+    return normalizeString(ouicards.getActiveSet()).trim();
+  }
+
+  return '';
+}
+
 function createNewSet() {
   clearStatusMessage();
 
@@ -385,7 +417,139 @@ function createNewSet() {
     domRefs.newSetNameInput.focus();
   }
 
-  setStatusMessage('Created set "' + trimmed + '". Conjunto creado.', false);
+  setStatusMessage('Added set "' + trimmed + '". Conjunto agregado.', false);
+}
+
+function renameActiveSet() {
+  clearStatusMessage();
+
+  var currentName = getSelectedSetName();
+
+  if (!currentName) {
+    setStatusMessage('Select a set to rename. Selecciona un conjunto para renombrar.', true);
+    return;
+  }
+
+  var promptMessage = 'Rename set "' + currentName + '" · Renombrar conjunto';
+  var proposedName = '';
+
+  if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
+    var promptResult = window.prompt(promptMessage, currentName);
+
+    if (promptResult === null) {
+      return;
+    }
+
+    proposedName = promptResult;
+  } else if (domRefs.newSetNameInput && domRefs.newSetNameInput.value) {
+    proposedName = domRefs.newSetNameInput.value;
+  }
+
+  var trimmed = normalizeString(proposedName).trim();
+
+  if (!trimmed) {
+    setStatusMessage('Enter a new name to rename the set. Ingresa un nuevo nombre.', true);
+
+    if (domRefs.newSetNameInput) {
+      domRefs.newSetNameInput.focus();
+    }
+
+    return;
+  }
+
+  if (trimmed === currentName) {
+    setStatusMessage('Set name unchanged. Nombre sin cambios.', false);
+    return;
+  }
+
+  if (typeof ouicards.renameSet !== 'function') {
+    setStatusMessage('Renaming is unavailable right now. No se puede renombrar en este momento.', true);
+    return;
+  }
+
+  var result = ouicards.renameSet(currentName, trimmed);
+
+  if (!result || result.error) {
+    var message = 'Unable to rename the set. No se pudo renombrar el conjunto.';
+
+    if (result && result.error) {
+      if (result.error === 'duplicate') {
+        message = 'A set named "' + trimmed + '" already exists. Ese conjunto ya existe.';
+      } else if (result.error === 'invalidName') {
+        message = 'Enter a valid name to rename the set. Ingresa un nombre válido.';
+      } else if (result.error === 'missing') {
+        message = 'Unable to find the selected set. No se encontró el conjunto.';
+      } else if (result.error === 'storageUnavailable') {
+        message = 'Renaming requires local storage support. Se necesita almacenamiento local para renombrar.';
+      }
+    }
+
+    setStatusMessage(message, true);
+    return;
+  }
+
+  populateSetOptions(result && Array.isArray(result.sets) ? result.sets : null, result && result.activeSet ? result.activeSet : trimmed);
+  refreshManualEditorOptions({ preserveSelection: true, preserveFields: true });
+  updateFooter();
+  presentCurrentCard();
+  updateSessionControls();
+  updateJsonPreview();
+
+  setStatusMessage('Renamed set to "' + (result.activeSet || trimmed) + '". Conjunto renombrado.', false);
+}
+
+function deleteActiveSet() {
+  clearStatusMessage();
+
+  var currentName = getSelectedSetName();
+
+  if (!currentName) {
+    setStatusMessage('Select a set to remove. Selecciona un conjunto para eliminar.', true);
+    return;
+  }
+
+  if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+    var confirmed = window.confirm('Remove set "' + currentName + '"? · ¿Eliminar el conjunto?');
+
+    if (!confirmed) {
+      return;
+    }
+  }
+
+  if (typeof ouicards.deleteSet !== 'function') {
+    setStatusMessage('Removing sets is unavailable right now. No se puede eliminar en este momento.', true);
+    return;
+  }
+
+  var result = ouicards.deleteSet(currentName);
+
+  if (!result || result.error) {
+    var message = 'Unable to remove the set. No se pudo eliminar el conjunto.';
+
+    if (result && result.error) {
+      if (result.error === 'lastSet') {
+        message = 'Keep at least one set. Mantén al menos un conjunto.';
+      } else if (result.error === 'missing') {
+        message = 'Unable to find the selected set. No se encontró el conjunto.';
+      } else if (result.error === 'storageUnavailable') {
+        message = 'Removing sets requires local storage support. Se necesita almacenamiento local para eliminar.';
+      }
+    }
+
+    setStatusMessage(message, true);
+    return;
+  }
+
+  stopSession({ skipRender: true });
+  populateSetOptions(result && Array.isArray(result.sets) ? result.sets : null, result && result.activeSet ? result.activeSet : null);
+  refreshManualEditorOptions();
+  updateFooter();
+  presentCurrentCard();
+  updateSessionControls();
+  updateJsonPreview();
+
+  var removedName = result.removed || currentName;
+  setStatusMessage('Removed set "' + removedName + '". Conjunto eliminado.', false);
 }
 
 async function ensureDeckLoaded() {
