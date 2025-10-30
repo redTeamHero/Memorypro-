@@ -260,6 +260,56 @@
     };
   }
 
+  function normalizeCardsFromList(cardList) {
+    if (!Array.isArray(cardList)) {
+      return [];
+    }
+
+    return cardList
+      .filter(function(card) {
+        return card && typeof card === 'object';
+      })
+      .map(normalizeCard)
+      .filter(function(card) {
+        return card.question || card.answer;
+      });
+  }
+
+  function attemptJSONParse(text) {
+    if (typeof text !== 'string') {
+      return null;
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function normalizeParsedPayload(parsed) {
+    if (!parsed || typeof parsed !== 'object') {
+      return [];
+    }
+
+    if (Array.isArray(parsed)) {
+      return normalizeCardsFromList(parsed);
+    }
+
+    if (Array.isArray(parsed.flashcards)) {
+      return normalizeCardsFromList(parsed.flashcards);
+    }
+
+    if (
+      Object.prototype.hasOwnProperty.call(parsed, 'question') ||
+      Object.prototype.hasOwnProperty.call(parsed, 'answer')
+    ) {
+      return normalizeCardsFromList([parsed]);
+    }
+
+    return [];
+  }
+
   function loadFromArray(array) {
     if (!Array.isArray(array)) {
       ouicards.flashcards = [];
@@ -382,6 +432,125 @@
     return text.trim();
   }
 
+  function parseLooseObjectCards(rawText) {
+    if (typeof rawText !== 'string') {
+      return null;
+    }
+
+    var trimmed = rawText.trim();
+
+    if (!trimmed) {
+      return null;
+    }
+
+    if (!/[{\[]/.test(trimmed)) {
+      return null;
+    }
+
+    if (!/question\s*:/.test(trimmed) && !/answer\s*:/.test(trimmed)) {
+      return null;
+    }
+
+    var working = trimmed.replace(/\r\n/g, '\n');
+
+    if (working.charAt(0) !== '[') {
+      working = '[' + working + ']';
+    }
+
+    var length = working.length;
+    var result = '';
+    var insideString = false;
+    var stringDelimiter = '"';
+
+    for (var index = 0; index < length; index++) {
+      var char = working.charAt(index);
+
+      if (insideString) {
+        if (char === '\\') {
+          result += char;
+          if (index + 1 < length) {
+            index += 1;
+            result += working.charAt(index);
+          }
+          continue;
+        }
+
+        if (char === stringDelimiter) {
+          insideString = false;
+          result += '"';
+          continue;
+        }
+
+        if (stringDelimiter === "'" && char === '"') {
+          result += '\\"';
+          continue;
+        }
+
+        if (char === '\n') {
+          result += '\\n';
+          continue;
+        }
+
+        if (char === '\r') {
+          result += '\\r';
+          continue;
+        }
+
+        result += char;
+        continue;
+      }
+
+      if (char === '"' || char === "'") {
+        insideString = true;
+        stringDelimiter = char;
+        result += '"';
+        continue;
+      }
+
+      if (/[A-Za-z_]/.test(char)) {
+        var start = index;
+        var end = index + 1;
+
+        while (end < length && /[A-Za-z0-9_]/.test(working.charAt(end))) {
+          end += 1;
+        }
+
+        var key = working.slice(start, end);
+        var cursor = end;
+
+        while (cursor < length && /\s/.test(working.charAt(cursor))) {
+          cursor += 1;
+        }
+
+        if (cursor < length && working.charAt(cursor) === ':') {
+          result += '"' + key + '"';
+          index = end - 1;
+
+          while (end < cursor) {
+            result += working.charAt(end);
+            end += 1;
+          }
+
+          continue;
+        }
+      }
+
+      result += char;
+    }
+
+    result = result.replace(/,\s*([}\]])/g, '$1');
+
+    var parsed = attemptJSONParse(result);
+
+    if (!parsed) {
+      return null;
+    }
+
+    var normalizedCards = normalizeParsedPayload(parsed);
+
+    return normalizedCards.length ? normalizedCards : null;
+  }
+
   function loadFromBrowser(selector, delimiter) {
     var rawValue = getInputValue(selector);
 
@@ -396,35 +565,20 @@
       return;
     }
 
-    var parsedCards = null;
-
     if (trimmedInput.charAt(0) === '{' || trimmedInput.charAt(0) === '[') {
-      var parsed = safeParseJSON(trimmedInput, null);
+      var strictParsed = attemptJSONParse(trimmedInput);
+      var strictCards = normalizeParsedPayload(strictParsed);
 
-      if (parsed && typeof parsed === 'object') {
-        if (Array.isArray(parsed)) {
-          parsedCards = parsed;
-        } else if (Array.isArray(parsed.flashcards)) {
-          parsedCards = parsed.flashcards;
-        } else if (parsed && (Object.prototype.hasOwnProperty.call(parsed, 'question') || Object.prototype.hasOwnProperty.call(parsed, 'answer'))) {
-          parsedCards = [parsed];
-        }
+      if (strictCards.length) {
+        ouicards.loadFromArray(strictCards);
+        return getFromLS();
       }
 
-      if (parsedCards) {
-        var normalizedCards = parsedCards
-          .filter(function(card) {
-            return card && typeof card === 'object';
-          })
-          .map(normalizeCard)
-          .filter(function(card) {
-            return card.question || card.answer;
-          });
+      var looseCards = parseLooseObjectCards(trimmedInput);
 
-        if (normalizedCards.length) {
-          ouicards.loadFromArray(normalizedCards);
-          return getFromLS();
-        }
+      if (looseCards) {
+        ouicards.loadFromArray(looseCards);
+        return getFromLS();
       }
     }
 
