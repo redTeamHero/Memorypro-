@@ -76,6 +76,28 @@
           </div>
 
 
+          <div class="card-section ai-importer" aria-label="AI textbook assistant">
+            <header class="section-heading">
+              <h2>Generate flashcards from a textbook </h2>
+              <p class="section-sub">Search Google Books, pick a chapter outline, and build a deck instantly.</p>
+            </header>
+            <div class="ai-search-row">
+              <label class="sr-only" for="textbook-query-input">Search textbooks</label>
+              <input
+                id="textbook-query-input"
+                type="text"
+                autocomplete="off"
+                placeholder="Campbell Biology"
+              />
+              <button id="search-textbook-button" type="button" class="primary-button">Search textbooks </button>
+            </div>
+            <p id="textbook-search-status" class="helper-text ai-status" aria-live="polite"></p>
+            <div id="textbook-search-results" class="ai-results" role="list"></div>
+            <div id="textbook-chapter-list" class="ai-chapters" role="list"></div>
+            <div id="textbook-flashcard-preview" class="ai-flashcards" aria-live="polite"></div>
+          </div>
+
+
         </section>
 
 
