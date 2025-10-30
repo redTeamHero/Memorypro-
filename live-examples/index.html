@@ -76,6 +76,42 @@
           </div>
 
 
+          <div class="card-section ai-importer" aria-label="AI textbook assistant">
+            <header class="section-heading">
+              <h2>Generate flashcards from a textbook </h2>
+              <p class="section-sub">Search Google Books or Open Library, or upload your own PDF/TXT to build a chapter outline instantly.</p>
+            </header>
+            <div class="ai-search-row">
+              <label class="sr-only" for="textbook-query-input">Search textbooks</label>
+              <input
+                id="textbook-query-input"
+                type="text"
+                autocomplete="off"
+                placeholder="Campbell Biology"
+              />
+              <button id="search-textbook-button" type="button" class="primary-button">Search textbooks </button>
+            </div>
+            <div class="ai-upload-row">
+              <label class="ai-upload-label" for="textbook-upload-input">
+                <span class="icon-cloud-upload label-icon" aria-hidden="true"></span>
+                <span>Attach textbook PDF/TXT (optional)</span>
+              </label>
+              <input
+                id="textbook-upload-input"
+                class="sr-only"
+                type="file"
+                accept=".pdf,.txt,.md,.markdown"
+              />
+              <span id="textbook-upload-name" class="ai-upload-name">Optional: attach PDF, TXT, or MD</span>
+            </div>
+            <p id="textbook-search-status" class="helper-text ai-status" aria-live="polite"></p>
+            <div id="textbook-catalog-warnings" class="ai-warnings hidden" aria-live="polite"></div>
+            <div id="textbook-search-results" class="ai-results" role="list"></div>
+            <div id="textbook-chapter-list" class="ai-chapters" role="list"></div>
+            <div id="textbook-flashcard-preview" class="ai-flashcards" aria-live="polite"></div>
+          </div>
+
+
         </section>
 
 

@@ -4,6 +4,16 @@ var studyMode = 'flashcard';
 var currentCardRecord = null;
 var pendingAdvanceHandle = null;
 
+var aiSearchState = {
+  results: [],
+  selectedBook: null,
+  chapters: [],
+  selectedChapter: null,
+  generated: null,
+  lastQuery: '',
+  warnings: [],
+};
+
 var domRefs = {
   uploadLabel: null,
   questionsInput: null,
@@ -37,6 +47,15 @@ var domRefs = {
   manualAnswerInput: null,
   addFlashcardButton: null,
   updateFlashcardButton: null,
+  textbookQueryInput: null,
+  textbookSearchButton: null,
+  textbookUploadInput: null,
+  textbookUploadName: null,
+  textbookWarnings: null,
+  textbookSearchResults: null,
+  textbookChapterList: null,
+  textbookFlashcardPreview: null,
+  textbookStatus: null,
 };
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -51,6 +70,7 @@ async function initializeApp() {
   await ensureDeckLoaded();
   initializeManualEditor();
   bindHandlers();
+  handleTextbookUploadChange();
   updateModeUI();
   ouicards.getFromLS();
   refreshManualEditorOptions();
@@ -92,6 +112,15 @@ function cacheDom() {
   domRefs.manualAnswerInput = document.getElementById('manual-answer-input');
   domRefs.addFlashcardButton = document.getElementById('add-flashcard-button');
   domRefs.updateFlashcardButton = document.getElementById('update-flashcard-button');
+  domRefs.textbookQueryInput = document.getElementById('textbook-query-input');
+  domRefs.textbookSearchButton = document.getElementById('search-textbook-button');
+  domRefs.textbookUploadInput = document.getElementById('textbook-upload-input');
+  domRefs.textbookUploadName = document.getElementById('textbook-upload-name');
+  domRefs.textbookWarnings = document.getElementById('textbook-catalog-warnings');
+  domRefs.textbookSearchResults = document.getElementById('textbook-search-results');
+  domRefs.textbookChapterList = document.getElementById('textbook-chapter-list');
+  domRefs.textbookFlashcardPreview = document.getElementById('textbook-flashcard-preview');
+  domRefs.textbookStatus = document.getElementById('textbook-search-status');
 }
 
 function initializeSets() {
@@ -696,6 +725,832 @@ function bindHandlers() {
   });
   attachActivate(domRefs.addFlashcardButton, handleAddFlashcard);
   attachActivate(domRefs.updateFlashcardButton, handleUpdateFlashcard);
+
+  attachActivate(domRefs.textbookSearchButton, safelyPerformTextbookSearch);
+
+  if (domRefs.textbookQueryInput) {
+    domRefs.textbookQueryInput.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        safelyPerformTextbookSearch();
+      }
+    });
+  }
+
+  if (domRefs.textbookUploadInput) {
+    domRefs.textbookUploadInput.addEventListener('change', handleTextbookUploadChange);
+  }
+
+  if (domRefs.textbookSearchResults) {
+    domRefs.textbookSearchResults.addEventListener('click', handleTextbookResultClick);
+  }
+
+  if (domRefs.textbookChapterList) {
+    domRefs.textbookChapterList.addEventListener('click', handleChapterSelection);
+  }
+
+  if (domRefs.textbookFlashcardPreview) {
+    domRefs.textbookFlashcardPreview.addEventListener('click', handleGeneratedFlashcardActions);
+  }
+}
+
+function safelyPerformTextbookSearch() {
+  performTextbookSearch().catch(function(error) {
+    console.error('Failed to search textbooks.', error);
+    var message = 'Unable to search for textbooks right now. Try again shortly.';
+
+    if (error && error.message) {
+      message += ' ' + error.message;
+    }
+
+    setTextbookStatus(message, 'error');
+  });
+}
+
+function handleTextbookUploadChange() {
+  if (!domRefs.textbookUploadInput) {
+    return;
+  }
+
+  var file = domRefs.textbookUploadInput.files && domRefs.textbookUploadInput.files[0]
+    ? domRefs.textbookUploadInput.files[0]
+    : null;
+
+  if (domRefs.textbookUploadName) {
+    if (file) {
+      domRefs.textbookUploadName.textContent = file.name;
+      domRefs.textbookUploadName.classList.add('has-file');
+    } else {
+      domRefs.textbookUploadName.textContent = 'Optional: attach PDF, TXT, or MD';
+      domRefs.textbookUploadName.classList.remove('has-file');
+    }
+  }
+}
+
+async function performTextbookSearch() {
+  if (!domRefs.textbookQueryInput) {
+    return;
+  }
+
+  var query = normalizeString(domRefs.textbookQueryInput.value || '').trim();
+  var file = domRefs.textbookUploadInput && domRefs.textbookUploadInput.files
+    ? domRefs.textbookUploadInput.files[0]
+    : null;
+
+  if (!query && !file) {
+    setTextbookStatus('Enter a textbook title or attach a PDF/textbook file to analyze.', 'error');
+    return;
+  }
+
+  aiSearchState.lastQuery = query;
+  aiSearchState.results = [];
+  aiSearchState.selectedBook = null;
+  aiSearchState.chapters = [];
+  aiSearchState.selectedChapter = null;
+  aiSearchState.generated = null;
+  aiSearchState.warnings = [];
+
+  if (file && !query) {
+    setTextbookStatus('Analyzing your upload…', null);
+  } else if (file && query) {
+    setTextbookStatus('Searching catalogs and analyzing your upload…', null);
+  } else {
+    setTextbookStatus('Searching textbook catalogs…', null);
+  }
+  renderTextbookResults([]);
+  renderChapterList([]);
+  renderGeneratedFlashcards(null);
+  renderCatalogWarnings([]);
+
+  var catalogResults = [];
+  var warnings = [];
+
+  if (query) {
+    var response = await fetch('/api/textbooks/search?' + new URLSearchParams({ q: query }));
+
+    if (!response.ok) {
+      throw new Error('Search request failed (' + response.status + ').');
+    }
+
+    var payload = await response.json();
+    var results = Array.isArray(payload.results) ? payload.results : [];
+    warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+
+    catalogResults = results.map(function(entry) {
+      return normalizeCatalogResult(entry);
+    }).filter(Boolean);
+  }
+
+  var uploadResult = null;
+
+  if (file) {
+    try {
+      uploadResult = await uploadLocalTextbook(file, query);
+    } catch (error) {
+      console.error('Upload analysis failed.', error);
+      warnings.push('UploadFailed');
+    }
+  }
+
+  var combinedResults = catalogResults.slice();
+
+  if (uploadResult && uploadResult.book) {
+    combinedResults.unshift(normalizeUploadedResult(uploadResult));
+  }
+
+  aiSearchState.results = combinedResults;
+  aiSearchState.warnings = warnings;
+
+  renderTextbookResults(combinedResults);
+
+  if (combinedResults.length) {
+    var statusMessage = file ? 'Choose a source to review its chapter outline.' : 'Select a book to explore its chapter outline.';
+
+    if (warnings.length) {
+      statusMessage += ' Some sources were unavailable; see notes below.';
+    }
+
+    setTextbookStatus(statusMessage, 'success');
+  } else if (warnings.indexOf('UploadFailed') !== -1) {
+    setTextbookStatus('Could not analyze the uploaded file. Try a different format or re-upload.', 'error');
+  } else {
+    setTextbookStatus('No results found. Try another textbook title or subject.', 'error');
+  }
+
+  renderCatalogWarnings(warnings);
+}
+
+function normalizeCatalogResult(entry) {
+  if (!entry || !entry.id) {
+    return null;
+  }
+
+  var source = normalizeString(entry.source || 'google_books').toLowerCase() || 'google_books';
+  var id = String(entry.id);
+  var authors = Array.isArray(entry.authors)
+    ? entry.authors.filter(function(name) {
+        return normalizeString(name || '').trim() !== '';
+      })
+    : [];
+  var categories = Array.isArray(entry.categories)
+    ? entry.categories.filter(function(label) {
+        return normalizeString(label || '').trim() !== '';
+      })
+    : [];
+
+  return {
+    uid: buildResultUid(source, id),
+    id: id,
+    source: source,
+    sourceLabel: getSourceLabel(source),
+    title: entry.title || 'Untitled',
+    authors: authors,
+    description: entry.description || '',
+    infoLink: entry.infoLink || '',
+    publishedDate: entry.publishedDate || '',
+    categories: categories,
+  };
+}
+
+function normalizeUploadedResult(payload) {
+  var book = payload && payload.book ? payload.book : {};
+  var chapters = payload && Array.isArray(payload.chapters) ? payload.chapters : [];
+  var title = book.title || 'Uploaded Textbook';
+  var id = book.id || 'upload-' + Date.now();
+
+  return {
+    uid: buildResultUid('upload', id),
+    id: id,
+    source: 'upload',
+    sourceLabel: getSourceLabel('upload'),
+    title: title,
+    description: book.description || '',
+    infoLink: '',
+    authors: [],
+    publishedDate: '',
+    categories: [],
+    uploadedFilename: book.filename || '',
+    prefetchedChapters: chapters,
+  };
+}
+
+async function uploadLocalTextbook(file, query) {
+  var formData = new FormData();
+  formData.append('file', file);
+
+  if (query) {
+    formData.append('title', query);
+  }
+
+  var response = await fetch('/api/textbooks/upload', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error('Upload request failed (' + response.status + ').');
+  }
+
+  return response.json();
+}
+
+function buildResultUid(source, id) {
+  return (source || 'catalog') + '::' + (id || 'unknown');
+}
+
+function renderCatalogWarnings(warnings) {
+  if (!domRefs.textbookWarnings) {
+    return;
+  }
+
+  domRefs.textbookWarnings.innerHTML = '';
+  domRefs.textbookWarnings.classList.add('hidden');
+
+  if (!Array.isArray(warnings) || !warnings.length) {
+    return;
+  }
+
+  var list = document.createElement('ul');
+  list.className = 'ai-warning-list';
+
+  warnings.forEach(function(code) {
+    var message = getWarningMessage(code);
+    if (!message) {
+      return;
+    }
+    var item = document.createElement('li');
+    item.textContent = message;
+    list.appendChild(item);
+  });
+
+  if (!list.childNodes.length) {
+    return;
+  }
+
+  domRefs.textbookWarnings.appendChild(list);
+  domRefs.textbookWarnings.classList.remove('hidden');
+}
+
+function getWarningMessage(code) {
+  switch (code) {
+    case 'GoogleBooksUnavailable':
+      return 'Google Books was unavailable; results may be incomplete.';
+    case 'OpenLibraryUnavailable':
+      return 'Open Library was unavailable; results may be incomplete.';
+    case 'UploadFailed':
+      return 'The uploaded file could not be analyzed. Try another format or re-upload.';
+    default:
+      return '';
+  }
+}
+
+function getSourceLabel(source) {
+  switch (source) {
+    case 'google_books':
+      return 'Google Books';
+    case 'open_library':
+      return 'Open Library';
+    case 'upload':
+      return 'Uploaded file';
+    default:
+      return 'Catalog';
+  }
+}
+
+function handleTextbookResultClick(event) {
+  var trigger = event && event.target ? event.target.closest('[data-volume-id]') : null;
+
+  if (!trigger) {
+    return;
+  }
+
+  event.preventDefault();
+
+  var volumeUid = trigger.getAttribute('data-volume-id');
+
+  if (!volumeUid) {
+    setTextbookStatus('Unable to read that selection. Please try again.', 'error');
+    return;
+  }
+
+  var selected = aiSearchState.results.find(function(entry) {
+    return entry && entry.uid === volumeUid;
+  });
+
+  if (!selected) {
+    setTextbookStatus('Unable to load that textbook. Please search again.', 'error');
+    return;
+  }
+
+  aiSearchState.selectedBook = selected;
+  aiSearchState.chapters = [];
+  aiSearchState.selectedChapter = null;
+  aiSearchState.generated = null;
+
+  renderTextbookResults(aiSearchState.results);
+  renderChapterList([]);
+  renderGeneratedFlashcards(null);
+
+  setTextbookStatus('Building a chapter outline for “' + selected.title + '”…', null);
+
+  requestTextbookChapters(selected).catch(function(error) {
+    console.error('Failed to load chapters.', error);
+    setTextbookStatus('Unable to build a chapter outline for this book.', 'error');
+  });
+}
+
+async function requestTextbookChapters(book) {
+  if (!book || !book.id) {
+    return;
+  }
+
+  if (book.source === 'upload' && Array.isArray(book.prefetchedChapters)) {
+    aiSearchState.selectedBook = book;
+    aiSearchState.chapters = book.prefetchedChapters;
+    aiSearchState.selectedChapter = null;
+    aiSearchState.generated = null;
+
+    renderTextbookResults(aiSearchState.results);
+    renderChapterList(book.prefetchedChapters);
+    renderGeneratedFlashcards(null);
+
+    setTextbookStatus('Choose a chapter to auto-generate flashcards.', 'success');
+    return;
+  }
+
+  var params = new URLSearchParams();
+
+  if (book.source) {
+    params.set('source', book.source);
+  }
+
+  var response = await fetch(
+    '/api/textbooks/' + encodeURIComponent(book.id) + '/chapters' + (params.toString() ? '?' + params.toString() : '')
+  );
+
+  if (!response.ok) {
+    throw new Error('Chapter request failed (' + response.status + ').');
+  }
+
+  var payload = await response.json();
+  var chapters = Array.isArray(payload.chapters) ? payload.chapters : [];
+  var bookDetails = payload.book && typeof payload.book === 'object' ? payload.book : {};
+
+  aiSearchState.selectedBook = Object.assign({}, book, bookDetails, { id: book.id, uid: book.uid, source: book.source });
+  aiSearchState.chapters = chapters;
+  aiSearchState.selectedChapter = null;
+  aiSearchState.generated = null;
+
+  renderTextbookResults(aiSearchState.results);
+  renderChapterList(chapters);
+  renderGeneratedFlashcards(null);
+
+  if (chapters.length) {
+    setTextbookStatus('Choose a chapter to auto-generate flashcards.', 'success');
+  } else {
+    setTextbookStatus('No chapter outline was available. Try another textbook.', 'error');
+  }
+}
+
+function handleChapterSelection(event) {
+  var trigger = event && event.target ? event.target.closest('[data-chapter-index]') : null;
+
+  if (!trigger) {
+    return;
+  }
+
+  event.preventDefault();
+
+  var chapterCard = trigger.closest('.ai-chapter-card');
+  var chapterIndex = chapterCard ? chapterCard.getAttribute('data-chapter-index') : trigger.getAttribute('data-chapter-index');
+  var chapterTitle = chapterCard ? chapterCard.getAttribute('data-chapter-title') : trigger.getAttribute('data-chapter-title');
+
+  var chapter = aiSearchState.chapters.find(function(entry) {
+    if (!entry) {
+      return false;
+    }
+
+    var entryIndex = entry.index != null ? String(entry.index) : '';
+
+    if (chapterIndex) {
+      return entryIndex === chapterIndex;
+    }
+
+    if (chapterTitle) {
+      return normalizeString(entry.title || '').trim() === normalizeString(chapterTitle || '').trim();
+    }
+
+    return false;
+  });
+
+  if (!chapter) {
+    return;
+  }
+
+  aiSearchState.selectedChapter = chapter;
+  aiSearchState.generated = null;
+
+  renderChapterList(aiSearchState.chapters);
+  renderGeneratedFlashcards(null);
+
+  setTextbookStatus('Generating flashcards for “' + chapter.title + '”…', null);
+
+  requestChapterFlashcards(chapter).catch(function(error) {
+    console.error('Failed to generate flashcards.', error);
+    setTextbookStatus('Unable to generate flashcards for that chapter.', 'error');
+  });
+}
+
+async function requestChapterFlashcards(chapter) {
+  if (!chapter || !aiSearchState.selectedBook) {
+    return;
+  }
+
+  var payload = {
+    bookTitle: aiSearchState.selectedBook.title,
+    chapterTitle: chapter.title,
+    chapterSummary: chapter.summary,
+    chapterIndex: chapter.index,
+  };
+
+  var response = await fetch('/api/textbooks/flashcards', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error('Flashcard request failed (' + response.status + ').');
+  }
+
+  var data = await response.json();
+  var flashcards = Array.isArray(data.flashcards) ? data.flashcards : [];
+
+  aiSearchState.generated = {
+    book: aiSearchState.selectedBook,
+    chapter: chapter,
+    flashcards: flashcards,
+  };
+
+  renderGeneratedFlashcards({
+    flashcards: flashcards,
+    book: aiSearchState.selectedBook,
+    chapter: chapter,
+  });
+
+  if (flashcards.length) {
+    setTextbookStatus('Generated ' + flashcards.length + ' flashcards. Import them into your active set.', 'success');
+  } else {
+    setTextbookStatus('No flashcards were generated. Try another chapter.', 'error');
+  }
+}
+
+function handleGeneratedFlashcardActions(event) {
+  var trigger = event && event.target ? event.target.closest('[data-action]') : null;
+
+  if (!trigger) {
+    return;
+  }
+
+  event.preventDefault();
+
+  var action = trigger.getAttribute('data-action');
+
+  if (action === 'import-generated-flashcards') {
+    importGeneratedFlashcards();
+  }
+}
+
+function importGeneratedFlashcards() {
+  if (!aiSearchState.generated || !Array.isArray(aiSearchState.generated.flashcards)) {
+    setTextbookStatus('Generate flashcards from a chapter before importing.', 'error');
+    return;
+  }
+
+  var flashcards = aiSearchState.generated.flashcards;
+  var addedCount = 0;
+
+  flashcards.forEach(function(card) {
+    var added = addCardToDeck(card);
+
+    if (added) {
+      addedCount += 1;
+    }
+  });
+
+  if (!addedCount) {
+    setTextbookStatus('No new flashcards were added to the set.', 'error');
+    return;
+  }
+
+  refreshManualEditorOptions({ preserveSelection: false });
+  updateManualEditorButtonState();
+  updateFooter();
+  updateJsonPreview();
+  updateSessionControls();
+  presentCurrentCard(false);
+
+  var activeSet = getActiveSetLabel();
+  var chapterTitle = aiSearchState.generated.chapter ? aiSearchState.generated.chapter.title : 'the chapter';
+
+  setTextbookStatus(
+    'Added ' + addedCount + ' flashcards from “' + chapterTitle + '” into “' + activeSet + '”.',
+    'success'
+  );
+}
+
+function renderTextbookResults(results) {
+  if (!domRefs.textbookSearchResults) {
+    return;
+  }
+
+  domRefs.textbookSearchResults.innerHTML = '';
+
+  if (!Array.isArray(results) || !results.length) {
+    return;
+  }
+
+  results.forEach(function(result) {
+    if (!result || !result.uid) {
+      return;
+    }
+
+    var card = document.createElement('div');
+    card.className = 'ai-result-card';
+    card.setAttribute('data-volume-id', result.uid);
+    card.setAttribute('data-source', result.source || 'catalog');
+
+    if (aiSearchState.selectedBook && aiSearchState.selectedBook.uid === result.uid) {
+      card.classList.add('selected');
+    }
+
+    var header = document.createElement('div');
+    header.className = 'ai-result-header';
+
+    var info = document.createElement('div');
+    var title = document.createElement('p');
+    title.className = 'ai-result-title';
+    title.textContent = result.title;
+    info.appendChild(title);
+
+    var metaText = buildTextbookMeta(result);
+
+    if (metaText) {
+      var meta = document.createElement('p');
+      meta.className = 'ai-result-meta';
+      meta.textContent = metaText;
+      info.appendChild(meta);
+    }
+
+    if (result.sourceLabel) {
+      var sourceBadge = document.createElement('span');
+      sourceBadge.className = 'ai-source-badge';
+      sourceBadge.textContent = result.sourceLabel;
+      info.appendChild(sourceBadge);
+    }
+
+    header.appendChild(info);
+
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'secondary-button ai-select-button';
+    button.setAttribute('data-volume-id', result.uid);
+
+    if (aiSearchState.selectedBook && aiSearchState.selectedBook.uid === result.uid) {
+      button.textContent = 'Selected';
+      button.setAttribute('aria-pressed', 'true');
+    } else {
+      button.textContent = 'Choose book';
+      button.removeAttribute('aria-pressed');
+    }
+
+    header.appendChild(button);
+    card.appendChild(header);
+
+    var description = limitText(result.description || '', 220);
+
+    if (description) {
+      var paragraph = document.createElement('p');
+      paragraph.className = 'ai-result-description';
+      paragraph.textContent = description;
+      card.appendChild(paragraph);
+    }
+
+    if (result.source === 'upload' && result.uploadedFilename) {
+      var filenameNote = document.createElement('p');
+      filenameNote.className = 'ai-result-meta';
+      filenameNote.textContent = 'File: ' + result.uploadedFilename;
+      card.appendChild(filenameNote);
+    }
+
+    if (result.infoLink) {
+      var link = document.createElement('a');
+      link.className = 'ai-result-link';
+      link.href = result.infoLink;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Open source listing';
+      card.appendChild(link);
+    }
+
+    domRefs.textbookSearchResults.appendChild(card);
+  });
+}
+
+function renderChapterList(chapters) {
+  if (!domRefs.textbookChapterList) {
+    return;
+  }
+
+  domRefs.textbookChapterList.innerHTML = '';
+
+  if (!Array.isArray(chapters) || !chapters.length) {
+    return;
+  }
+
+  chapters.forEach(function(chapter) {
+    if (!chapter) {
+      return;
+    }
+
+    var chapterIndex = chapter.index != null ? String(chapter.index) : '';
+    var titleText = chapter.title || 'Untitled';
+
+    var card = document.createElement('div');
+    card.className = 'ai-chapter-card';
+    card.setAttribute('data-chapter-index', chapterIndex);
+    card.setAttribute('data-chapter-title', titleText);
+    card.setAttribute('data-chapter-summary', chapter.summary || '');
+
+    var isSelected = false;
+
+    if (aiSearchState.selectedChapter) {
+      var selectedIndex = aiSearchState.selectedChapter.index != null ? String(aiSearchState.selectedChapter.index) : '';
+      var selectedTitle = normalizeString(aiSearchState.selectedChapter.title || '').trim();
+
+      if (chapterIndex && selectedIndex === chapterIndex) {
+        isSelected = true;
+      } else if (!chapterIndex && !selectedIndex && selectedTitle) {
+        isSelected = selectedTitle === normalizeString(titleText).trim();
+      }
+    }
+
+    if (isSelected) {
+      card.classList.add('active');
+    }
+
+    var header = document.createElement('div');
+    header.className = 'ai-result-header';
+
+    var info = document.createElement('div');
+    var title = document.createElement('p');
+    title.className = 'ai-result-title';
+    var labelPrefix = chapter.index ? 'Chapter ' + chapter.index : 'Chapter';
+    title.textContent = labelPrefix + ': ' + titleText;
+    info.appendChild(title);
+    header.appendChild(info);
+
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'secondary-button ai-select-button';
+    button.setAttribute('data-chapter-index', chapterIndex);
+    button.setAttribute('data-chapter-title', titleText);
+
+    if (isSelected) {
+      button.textContent = 'Selected';
+      button.setAttribute('aria-pressed', 'true');
+    } else {
+      button.textContent = 'Use chapter';
+      button.removeAttribute('aria-pressed');
+    }
+
+    header.appendChild(button);
+    card.appendChild(header);
+
+    var summaryText = limitText(chapter.summary || '', 260);
+
+    if (summaryText) {
+      var summary = document.createElement('p');
+      summary.className = 'ai-chapter-summary';
+      summary.textContent = summaryText;
+      card.appendChild(summary);
+    }
+
+    domRefs.textbookChapterList.appendChild(card);
+  });
+}
+
+function renderGeneratedFlashcards(payload) {
+  if (!domRefs.textbookFlashcardPreview) {
+    return;
+  }
+
+  domRefs.textbookFlashcardPreview.innerHTML = '';
+
+  var data = payload && typeof payload === 'object' ? payload : null;
+  var flashcards = data && Array.isArray(data.flashcards) ? data.flashcards : [];
+
+  if (!flashcards.length) {
+    return;
+  }
+
+  var title = data && data.chapter ? data.chapter.title : 'Selected chapter';
+
+  var header = document.createElement('div');
+  header.className = 'ai-result-header';
+
+  var label = document.createElement('p');
+  label.className = 'ai-result-title';
+  label.textContent = 'Flashcards for “' + title + '”';
+  header.appendChild(label);
+  domRefs.textbookFlashcardPreview.appendChild(header);
+
+  var list = document.createElement('ol');
+  list.className = 'ai-flashcards-list';
+
+  flashcards.forEach(function(card) {
+    if (!card) {
+      return;
+    }
+
+    var item = document.createElement('li');
+    var question = document.createElement('strong');
+    question.textContent = card.question;
+    item.appendChild(question);
+
+    if (card.answer) {
+      var answer = document.createElement('span');
+      answer.textContent = ' — ' + card.answer;
+      item.appendChild(answer);
+    }
+
+    list.appendChild(item);
+  });
+
+  domRefs.textbookFlashcardPreview.appendChild(list);
+
+  var actions = document.createElement('div');
+  actions.className = 'ai-flashcards-actions';
+
+  var importButton = document.createElement('button');
+  importButton.type = 'button';
+  importButton.className = 'primary-button';
+  importButton.setAttribute('data-action', 'import-generated-flashcards');
+  importButton.textContent = 'Add ' + flashcards.length + ' cards to active set';
+  actions.appendChild(importButton);
+
+  domRefs.textbookFlashcardPreview.appendChild(actions);
+}
+
+function setTextbookStatus(message, variant) {
+  if (!domRefs.textbookStatus) {
+    return;
+  }
+
+  domRefs.textbookStatus.textContent = message || '';
+  domRefs.textbookStatus.classList.remove('status-error', 'status-success');
+
+  if (variant === 'error') {
+    domRefs.textbookStatus.classList.add('status-error');
+  } else if (variant === 'success') {
+    domRefs.textbookStatus.classList.add('status-success');
+  }
+}
+
+function buildTextbookMeta(result) {
+  if (!result) {
+    return '';
+  }
+
+  var parts = [];
+
+  if (Array.isArray(result.authors) && result.authors.length) {
+    parts.push(result.authors.join(', '));
+  }
+
+  if (result.publishedDate) {
+    parts.push(result.publishedDate);
+  }
+
+  if (Array.isArray(result.categories) && result.categories.length) {
+    parts.push(result.categories.slice(0, 2).join(' · '));
+  }
+
+  return parts.join(' · ');
+}
+
+function limitText(value, maxLength) {
+  var text = normalizeString(value || '').trim();
+
+  if (!text) {
+    return '';
+  }
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return text.slice(0, Math.max(0, maxLength - 1)).trim() + '…';
 }
 
 function handleAddFlashcard() {
