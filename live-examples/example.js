@@ -846,7 +846,13 @@ async function requestTextbookChapters(book) {
     return;
   }
 
-  var response = await fetch('/api/textbooks/' + encodeURIComponent(book.id) + '/chapters');
+  var bookId = String(book.id || '');
+
+  if (bookId.charAt(0) === '/') {
+    bookId = bookId.slice(1);
+  }
+
+  var response = await fetch('/api/textbooks/' + encodeURIComponent(bookId) + '/chapters');
 
   if (!response.ok) {
     throw new Error('Chapter request failed (' + response.status + ').');
