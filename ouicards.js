@@ -341,6 +341,47 @@
     return target;
   }
 
+  function stripCodeFencePayload(value) {
+    if (typeof value !== 'string') {
+      return '';
+    }
+
+    var text = value.trim();
+
+    if (text.indexOf('```') === 0) {
+      text = text.replace(/^```[a-z0-9_-]*\s*/i, '');
+      var closingFenceIndex = text.lastIndexOf('```');
+
+      if (closingFenceIndex !== -1) {
+        text = text.slice(0, closingFenceIndex);
+      }
+
+      text = text.trim();
+    }
+
+    var firstBrace = text.indexOf('{');
+    var firstBracket = text.indexOf('[');
+    var startIndex = -1;
+
+    if (firstBrace !== -1 && firstBracket !== -1) {
+      startIndex = Math.min(firstBrace, firstBracket);
+    } else if (firstBrace !== -1) {
+      startIndex = firstBrace;
+    } else if (firstBracket !== -1) {
+      startIndex = firstBracket;
+    }
+
+    if (startIndex > 0) {
+      var prefix = text.slice(0, startIndex).trim();
+
+      if (prefix === '' || /^[a-z]+$/i.test(prefix)) {
+        text = text.slice(startIndex);
+      }
+    }
+
+    return text.trim();
+  }
+
   function loadFromBrowser(selector, delimiter) {
     var rawValue = getInputValue(selector);
 
@@ -348,7 +389,7 @@
       return;
     }
 
-    var trimmedInput = rawValue.trim();
+    var trimmedInput = stripCodeFencePayload(rawValue);
 
     if (trimmedInput === '') {
       console.log('There are no flashcards to upload.');
@@ -387,7 +428,7 @@
       }
     }
 
-    var userInput = rawValue
+    var userInput = trimmedInput
       .split(/\r?\n/)
       .map(function(card) {
         return card.trim();
