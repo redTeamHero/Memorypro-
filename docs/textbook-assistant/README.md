@@ -75,5 +75,6 @@ Each flashcard set balances overview, linkage to the larger book, supporting det
 - **Empty results:** Try broadening the search term; the server only returns the top five Google Books matches by default.【F:backend/app.py†L200-L259】
 - **No chapters generated:** Some Google Books entries lack descriptions. The server falls back to using subject categories; if none exist, you may need to write a short summary manually before generating flashcards.【F:backend/app.py†L180-L239】
 - **Import button disabled:** Ensure a study set is selected in the "Organize your study sets" control. Generated cards append to the active set only when one is active.【F:live-examples/index.html†L24-L63】【F:live-examples/example.js†L401-L520】
+- **404 from textbook search:** The browser could not reach `/api/textbooks/search`. Confirm the Flask server is running by calling `curl http://localhost:5000/api/textbooks/search?q=biology` and, if you serve the front-end through another dev server, configure its proxy to forward `/api/*` to the backend origin.【F:backend/app.py†L338-L359】【F:live-examples/example.js†L774-L804】
 
 Happy studying!
