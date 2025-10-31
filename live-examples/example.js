@@ -66,7 +66,7 @@ async function initializeApp() {
   await ensureDeckLoaded();
   initializeManualEditor();
   bindHandlers();
-  handleTextbookUploadChange();
+  handleTextbookQueryInput();
   updateModeUI();
   ouicards.getFromLS();
   refreshManualEditorOptions();
@@ -741,6 +741,32 @@ function bindHandlers() {
   if (domRefs.textbookFlashcardPreview) {
     domRefs.textbookFlashcardPreview.addEventListener('click', handleGeneratedFlashcardActions);
   }
+}
+
+function handleTextbookQueryInput() {
+  if (!domRefs.textbookQueryInput) {
+    return;
+  }
+
+  domRefs.textbookQueryInput.addEventListener('input', function() {
+    var query = normalizeString(domRefs.textbookQueryInput.value || '').trim();
+
+    if (query) {
+      return;
+    }
+
+    aiSearchState.lastQuery = '';
+    aiSearchState.results = [];
+    aiSearchState.selectedBook = null;
+    aiSearchState.chapters = [];
+    aiSearchState.selectedChapter = null;
+    aiSearchState.generated = null;
+
+    setTextbookStatus('', null);
+    renderTextbookResults([]);
+    renderChapterList([]);
+    renderGeneratedFlashcards(null);
+  });
 }
 
 function safelyPerformTextbookSearch() {
