@@ -495,7 +495,7 @@
         continue;
       }
 
-      if (char === '"' || char === "'") {
+      if (char === '"' || char === "'" || char === '`') {
         insideString = true;
         stringDelimiter = char;
         result += '"';
