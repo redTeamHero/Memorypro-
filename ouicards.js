@@ -687,15 +687,26 @@
   }
 
   function buildQuestionHTML(rawQuestion) {
-    var questionEl, answerEl;
+    function buildParagraph(text) {
+      var paragraph = document.createElement('p');
+      var safeText = typeof text === 'string' ? text : '';
+      var lines = safeText.split(/\n/);
 
-    questionEl = document.createElement('p');
-    questionEl.innerHTML = rawQuestion.question;
+      lines.forEach(function(line, index) {
+        paragraph.appendChild(document.createTextNode(line));
 
-    answerEl = document.createElement('p');
-    answerEl.innerHTML = rawQuestion.answer.replace(/\n/g, '<br>');
+        if (index < lines.length - 1) {
+          paragraph.appendChild(document.createElement('br'));
+        }
+      });
 
-    return {question: questionEl, answer: answerEl};
+      return paragraph;
+    }
+
+    var questionEl = buildParagraph(rawQuestion.question);
+    var answerEl = buildParagraph(rawQuestion.answer);
+
+    return { question: questionEl, answer: answerEl };
   }
 
   function saveToLS() {
