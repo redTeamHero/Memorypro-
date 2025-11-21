@@ -422,11 +422,7 @@
     }
 
     if (startIndex > 0) {
-      var prefix = text.slice(0, startIndex).trim();
-
-      if (prefix === '' || /^[a-z]+$/i.test(prefix)) {
-        text = text.slice(startIndex);
-      }
+      text = text.slice(startIndex);
     }
 
     return text.trim();
@@ -495,7 +491,7 @@
         continue;
       }
 
-      if (char === '"' || char === "'") {
+      if (char === '"' || char === "'" || char === '`') {
         insideString = true;
         stringDelimiter = char;
         result += '"';
