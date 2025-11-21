@@ -422,11 +422,23 @@
     }
 
     if (startIndex > 0) {
-      var prefix = text.slice(0, startIndex).trim();
+      text = text.slice(startIndex);
+    }
 
-      if (prefix === '' || /^[a-z]+$/i.test(prefix)) {
-        text = text.slice(startIndex);
-      }
+    var lastBrace = text.lastIndexOf('}');
+    var lastBracket = text.lastIndexOf(']');
+    var endIndex = -1;
+
+    if (lastBrace !== -1 && lastBracket !== -1) {
+      endIndex = Math.max(lastBrace, lastBracket);
+    } else if (lastBrace !== -1) {
+      endIndex = lastBrace;
+    } else if (lastBracket !== -1) {
+      endIndex = lastBracket;
+    }
+
+    if (endIndex !== -1 && endIndex + 1 < text.length) {
+      text = text.slice(0, endIndex + 1);
     }
 
     return text.trim();
@@ -495,7 +507,7 @@
         continue;
       }
 
-      if (char === '"' || char === "'") {
+      if (char === '"' || char === "'" || char === '`') {
         insideString = true;
         stringDelimiter = char;
         result += '"';
