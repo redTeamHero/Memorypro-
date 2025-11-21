@@ -809,7 +809,15 @@ async function performTextbookSearch() {
   var response = await fetch('/api/textbooks/search?' + new URLSearchParams({ q: query }));
 
   if (!response.ok) {
-    throw new Error('Search request failed (' + response.status + ').');
+    var errorMessage = 'Search request failed (' + response.status + ').';
+
+    if (response.status === 404) {
+      errorMessage += ' The /api/textbooks/search endpoint was not found. '
+        + 'Double-check that the Flask backend is running on the same origin '
+        + 'or that your dev-server proxy forwards /api/* requests to it.';
+    }
+
+    throw new Error(errorMessage);
   }
 
   var payload = await response.json();
