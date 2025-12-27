@@ -13,6 +13,11 @@ var aiSearchState = {
   lastQuery: '',
 };
 
+var docUploadState = {
+  flashcards: null,
+  source: '',
+};
+
 var domRefs = {
   uploadLabel: null,
   questionsInput: null,
@@ -52,6 +57,10 @@ var domRefs = {
   textbookChapterList: null,
   textbookFlashcardPreview: null,
   textbookStatus: null,
+  docUploadInput: null,
+  docUploadButton: null,
+  docUploadStatus: null,
+  docFlashcardPreview: null,
 };
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -114,6 +123,10 @@ function cacheDom() {
   domRefs.textbookChapterList = document.getElementById('textbook-chapter-list');
   domRefs.textbookFlashcardPreview = document.getElementById('textbook-flashcard-preview');
   domRefs.textbookStatus = document.getElementById('textbook-search-status');
+  domRefs.docUploadInput = document.getElementById('doc-upload-input');
+  domRefs.docUploadButton = document.getElementById('doc-upload-button');
+  domRefs.docUploadStatus = document.getElementById('doc-upload-status');
+  domRefs.docFlashcardPreview = document.getElementById('doc-flashcard-preview');
 }
 
 function initializeSets() {
@@ -741,6 +754,8 @@ function bindHandlers() {
   if (domRefs.textbookFlashcardPreview) {
     domRefs.textbookFlashcardPreview.addEventListener('click', handleGeneratedFlashcardActions);
   }
+
+  attachActivate(domRefs.docUploadButton, safelyHandleDocumentUpload);
 }
 
 function handleTextbookQueryInput() {
@@ -779,6 +794,19 @@ function safelyPerformTextbookSearch() {
     }
 
     setTextbookStatus(message, 'error');
+  });
+}
+
+function safelyHandleDocumentUpload() {
+  handleDocumentUpload().catch(function(error) {
+    console.error('Failed to generate flashcards from upload.', error);
+    var message = 'Unable to generate flashcards right now. Please try again shortly.';
+
+    if (error && error.message) {
+      message += ' ' + error.message;
+    }
+
+    setDocUploadStatus(message, 'error');
   });
 }
 
@@ -822,6 +850,54 @@ async function performTextbookSearch() {
     setTextbookStatus('Select a book to explore its chapter outline.', 'success');
   } else {
     setTextbookStatus('No results found. Try another textbook title or subject.', 'error');
+  }
+}
+
+async function handleDocumentUpload() {
+  if (!domRefs.docUploadInput) {
+    return;
+  }
+
+  var file = domRefs.docUploadInput.files && domRefs.docUploadInput.files[0];
+
+  if (!file) {
+    setDocUploadStatus('Select a PDF, DOCX, or text file to continue.', 'error');
+    return;
+  }
+
+  if (!file.name.toLowerCase().match(/\.(pdf|docx?|txt)$/)) {
+    setDocUploadStatus('Unsupported file type. Upload PDF, DOC, DOCX, or TXT files.', 'error');
+    return;
+  }
+
+  setDocUploadStatus('Uploading and extracting text…', null);
+  renderDocFlashcards(null);
+
+  var formData = new FormData();
+  formData.append('file', file);
+
+  var response = await fetch('/api/documents/flashcards', { method: 'POST', body: formData });
+
+  if (!response.ok) {
+    throw new Error('Upload request failed (' + response.status + ').');
+  }
+
+  var payload = await response.json();
+  var flashcards = Array.isArray(payload.flashcards) ? payload.flashcards : [];
+  var sourceLabel = payload.metadata && payload.metadata.source ? payload.metadata.source : file.name;
+
+  docUploadState.flashcards = flashcards;
+  docUploadState.source = sourceLabel;
+
+  renderDocFlashcards({
+    flashcards: flashcards,
+    source: sourceLabel,
+  });
+
+  if (flashcards.length) {
+    setDocUploadStatus('Generated ' + flashcards.length + ' flashcards from "' + sourceLabel + '".', 'success');
+  } else {
+    setDocUploadStatus('No flashcards were generated. Try another document.', 'error');
   }
 }
 
@@ -1051,6 +1127,42 @@ function importGeneratedFlashcards() {
   );
 }
 
+function importDocumentFlashcards() {
+  if (!docUploadState.flashcards || !Array.isArray(docUploadState.flashcards)) {
+    setDocUploadStatus('Upload a document and generate flashcards before importing.', 'error');
+    return;
+  }
+
+  var flashcards = docUploadState.flashcards;
+  var addedCount = 0;
+
+  flashcards.forEach(function(card) {
+    var added = addCardToDeck(card);
+
+    if (added) {
+      addedCount += 1;
+    }
+  });
+
+  if (!addedCount) {
+    setDocUploadStatus('No new flashcards were added to the set.', 'error');
+    return;
+  }
+
+  refreshManualEditorOptions({ preserveSelection: false });
+  updateManualEditorButtonState();
+  updateFooter();
+  updateJsonPreview();
+  updateSessionControls();
+  presentCurrentCard(false);
+
+  var activeSet = getActiveSetLabel();
+  setDocUploadStatus(
+    'Added ' + addedCount + ' flashcards from "' + (docUploadState.source || 'the document') + '" into "' + activeSet + '".',
+    'success'
+  );
+}
+
 function renderTextbookResults(results) {
   if (!domRefs.textbookSearchResults) {
     return;
@@ -1269,6 +1381,73 @@ function renderGeneratedFlashcards(payload) {
   domRefs.textbookFlashcardPreview.appendChild(actions);
 }
 
+function renderDocFlashcards(payload) {
+  if (!domRefs.docFlashcardPreview) {
+    return;
+  }
+
+  domRefs.docFlashcardPreview.innerHTML = '';
+
+  if (!payload || !Array.isArray(payload.flashcards) || !payload.flashcards.length) {
+    return;
+  }
+
+  var header = document.createElement('div');
+  header.className = 'ai-result-header';
+  var label = document.createElement('p');
+  label.className = 'ai-result-title';
+  label.textContent = 'Flashcards from "' + (payload.source || 'Document') + '"';
+  header.appendChild(label);
+  domRefs.docFlashcardPreview.appendChild(header);
+
+  var list = document.createElement('ol');
+  list.className = 'ai-flashcards-list';
+
+  payload.flashcards.forEach(function(card, index) {
+    if (!card) {
+      return;
+    }
+
+    var item = document.createElement('li');
+    var question = normalizeString(card.question || '');
+    var answer = normalizeString(card.answer || '');
+    var tags = Array.isArray(card.tags) ? card.tags : [];
+
+    var questionLabel = document.createElement('strong');
+    questionLabel.textContent = 'Q' + (index + 1) + ': ' + summarizeCardText(question, 120);
+    item.appendChild(questionLabel);
+
+    if (answer) {
+      var answerEl = document.createElement('div');
+      answerEl.textContent = 'A: ' + summarizeCardText(answer, 160);
+      item.appendChild(answerEl);
+    }
+
+    if (tags.length) {
+      var tagsEl = document.createElement('div');
+      tagsEl.className = 'ai-tags';
+      tagsEl.textContent = 'Tags: ' + tags.join(', ');
+      item.appendChild(tagsEl);
+    }
+
+    list.appendChild(item);
+  });
+
+  domRefs.docFlashcardPreview.appendChild(list);
+
+  var actions = document.createElement('div');
+  actions.className = 'ai-flashcards-actions';
+
+  var importButton = document.createElement('button');
+  importButton.type = 'button';
+  importButton.className = 'primary-button';
+  importButton.textContent = 'Import flashcards';
+  importButton.addEventListener('click', importDocumentFlashcards);
+
+  actions.appendChild(importButton);
+  domRefs.docFlashcardPreview.appendChild(actions);
+}
+
 function setTextbookStatus(message, variant) {
   if (!domRefs.textbookStatus) {
     return;
@@ -1281,6 +1460,21 @@ function setTextbookStatus(message, variant) {
     domRefs.textbookStatus.classList.add('status-error');
   } else if (variant === 'success') {
     domRefs.textbookStatus.classList.add('status-success');
+  }
+}
+
+function setDocUploadStatus(message, variant) {
+  if (!domRefs.docUploadStatus) {
+    return;
+  }
+
+  domRefs.docUploadStatus.textContent = message || '';
+  domRefs.docUploadStatus.classList.remove('status-error', 'status-success');
+
+  if (variant === 'error') {
+    domRefs.docUploadStatus.classList.add('status-error');
+  } else if (variant === 'success') {
+    domRefs.docUploadStatus.classList.add('status-success');
   }
 }
 
