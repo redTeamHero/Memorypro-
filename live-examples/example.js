@@ -18,6 +18,27 @@ var docUploadState = {
   source: '',
 };
 
+var API_BASE_URL = (function() {
+  if (typeof window !== 'undefined') {
+    var override = window.__MEMORYPRO_API_BASE__;
+    if (override && typeof override === 'string') {
+      return override.replace(/\/+$/, '');
+    }
+
+    try {
+      var parsed = new URL(window.location.href);
+      if (parsed.port === '8000') {
+        parsed.port = '5000';
+        return parsed.origin;
+      }
+    } catch (error) {
+      console.warn('Could not determine API base URL from window location.', error);
+    }
+  }
+
+  return '';
+})();
+
 var domRefs = {
   uploadLabel: null,
   questionsInput: null,
@@ -68,6 +89,36 @@ document.addEventListener('DOMContentLoaded', function() {
     console.error('Failed to initialize Memorypro UI.', error);
   });
 });
+
+function buildApiUrl(path) {
+  if (!path) {
+    return API_BASE_URL;
+  }
+
+  var normalizedPath = path.charAt(0) === '/' ? path : '/' + path;
+  return API_BASE_URL + normalizedPath;
+}
+
+async function apiFetch(path, options) {
+  var targetUrl = buildApiUrl(path);
+  var response;
+
+  try {
+    response = await fetch(targetUrl, options);
+  } catch (error) {
+    throw new Error('Unable to reach the backend API. Start the Flask server with "python backend/app.py" and retry.');
+  }
+
+  if (response.status === 404 || response.status === 501) {
+    throw new Error('The backend API is not available. Start the Flask server with "python backend/app.py" and retry.');
+  }
+
+  if (!response.ok) {
+    throw new Error('Request failed (' + response.status + ').');
+  }
+
+  return response;
+}
 
 async function initializeApp() {
   cacheDom();
@@ -599,11 +650,7 @@ async function ensureDeckLoaded() {
   }
 
   try {
-    var response = await fetch('/api/decks/default', { headers: { Accept: 'application/json' } });
-
-    if (!response.ok) {
-      throw new Error('Request failed with status ' + response.status);
-    }
+    var response = await apiFetch('/api/decks/default', { headers: { Accept: 'application/json' } });
 
     var deck = await response.json();
 
@@ -834,11 +881,7 @@ async function performTextbookSearch() {
   renderChapterList([]);
   renderGeneratedFlashcards(null);
 
-  var response = await fetch('/api/textbooks/search?' + new URLSearchParams({ q: query }));
-
-  if (!response.ok) {
-    throw new Error('Search request failed (' + response.status + ').');
-  }
+  var response = await apiFetch('/api/textbooks/search?' + new URLSearchParams({ q: query }));
 
   var payload = await response.json();
   var results = Array.isArray(payload.results) ? payload.results : [];
@@ -876,11 +919,7 @@ async function handleDocumentUpload() {
   var formData = new FormData();
   formData.append('file', file);
 
-  var response = await fetch('/api/documents/flashcards', { method: 'POST', body: formData });
-
-  if (!response.ok) {
-    throw new Error('Upload request failed (' + response.status + ').');
-  }
+  var response = await apiFetch('/api/documents/flashcards', { method: 'POST', body: formData });
 
   var payload = await response.json();
   var flashcards = Array.isArray(payload.flashcards) ? payload.flashcards : [];
@@ -954,11 +993,7 @@ async function requestTextbookChapters(book) {
     bookId = bookId.slice(1);
   }
 
-  var response = await fetch('/api/textbooks/' + encodeURIComponent(bookId) + '/chapters');
-
-  if (!response.ok) {
-    throw new Error('Chapter request failed (' + response.status + ').');
-  }
+  var response = await apiFetch('/api/textbooks/' + encodeURIComponent(bookId) + '/chapters');
 
   var payload = await response.json();
   var chapters = Array.isArray(payload.chapters) ? payload.chapters : [];
@@ -1041,15 +1076,11 @@ async function requestChapterFlashcards(chapter) {
     chapterIndex: chapter.index,
   };
 
-  var response = await fetch('/api/textbooks/flashcards', {
+  var response = await apiFetch('/api/textbooks/flashcards', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-
-  if (!response.ok) {
-    throw new Error('Flashcard request failed (' + response.status + ').');
-  }
 
   var data = await response.json();
   var flashcards = Array.isArray(data.flashcards) ? data.flashcards : [];
