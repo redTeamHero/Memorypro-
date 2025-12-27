@@ -1,13 +1,17 @@
 import json
+import os
 import re
 from collections import Counter
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import requests
+from docx import Document
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
+from openai import OpenAI
 from pypdf import PdfReader
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -15,6 +19,9 @@ FRONTEND_DIR = (BASE_DIR.parent / "live-examples").resolve()
 DATA_DIR = BASE_DIR / "data"
 DEFAULT_DECK_FILE = DATA_DIR / "default_deck.json"
 PROGRESS_FILE = DATA_DIR / "progress.json"
+DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+MAX_CHARS_PER_CHUNK = 5500
+MAX_FLASHCARDS_PER_CHUNK = 20
 
 GOOGLE_BOOKS_SEARCH_URL = "https://www.googleapis.com/books/v1/volumes"
 GOOGLE_BOOKS_DEFAULT_LIMIT = 5
@@ -83,6 +90,20 @@ def normalize_text(value: Optional[str]) -> str:
     if not value:
         return ""
     return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def split_text(text: str, max_chars: int = MAX_CHARS_PER_CHUNK) -> List[str]:
+    cleaned = text or ""
+    if not cleaned:
+        return []
+
+    segments: List[str] = []
+    cursor = 0
+    while cursor < len(cleaned):
+        segments.append(cleaned[cursor : cursor + max_chars])
+        cursor += max_chars
+
+    return segments
 
 
 def sentence_split(text: str) -> List[str]:
@@ -325,6 +346,121 @@ def generate_flashcards(
     return filtered_cards
 
 
+def extract_text_from_file(file: Any) -> str:
+    filename = normalize_text(getattr(file, "filename", "")) or "document"
+    lower_name = filename.lower()
+
+    if lower_name.endswith(".pdf"):
+        file.stream.seek(0)
+        reader = PdfReader(file.stream)
+        text_parts: List[str] = []
+        for page in reader.pages:
+            extracted = page.extract_text() or ""
+            if extracted:
+                text_parts.append(extracted)
+        return "\n".join(text_parts)
+
+    if lower_name.endswith(".docx"):
+        file.stream.seek(0)
+        buffer = BytesIO(file.read())
+        document = Document(buffer)
+        return "\n".join(paragraph.text for paragraph in document.paragraphs)
+
+    file.stream.seek(0)
+    return file.read().decode("utf-8", errors="ignore")
+
+
+def build_flashcard_prompt(text: str, source: str) -> str:
+    return f"""
+You are a flashcard generator.
+
+Input: Raw text from a PDF or document.
+
+Output Format (JSON array):
+[
+  {{
+    "question": "Question text here",
+    "answer": "Answer text here",
+    "tags": ["tag1","tag2"],
+    "source": "{source}"
+  }}
+]
+
+Instructions:
+1) Read the text carefully.
+2) Identify key concepts, terms, definitions, and ideas.
+3) Generate flashcards where each card is a meaningful Q/A pair.
+4) Avoid overly long answers; keep cards concise.
+5) Include relevant tags based on document sections or keywords.
+6) Do not hallucinate — use only the provided text.
+
+Here’s the text:
+{text}
+"""
+
+
+def parse_flashcard_response(raw_response: str, source: str) -> List[Dict[str, Any]]:
+    cleaned = raw_response.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z]*", "", cleaned, count=1).strip()
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3].strip()
+
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    parsed: List[Dict[str, Any]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        question = normalize_text(item.get("question"))
+        answer = normalize_text(item.get("answer"))
+        tags = item.get("tags") or []
+
+        if not question or not answer:
+            continue
+
+        parsed.append(
+            {
+                "question": question,
+                "answer": answer,
+                "tags": [normalize_text(tag) for tag in tags if normalize_text(tag)],
+                "source": item.get("source") or source,
+            }
+        )
+
+    return parsed
+
+
+def call_openai_flashcards(chunks: Sequence[str], source: str) -> List[Dict[str, Any]]:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured.")
+
+    client = OpenAI(api_key=api_key)
+    flashcards: List[Dict[str, Any]] = []
+
+    for chunk in chunks:
+        prompt = build_flashcard_prompt(chunk, source)
+        response = client.chat.completions.create(
+            model=DEFAULT_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=1200,
+        )
+
+        content = response.choices[0].message.content if response.choices else ""
+        parsed_cards = parse_flashcard_response(content or "[]", source)
+        flashcards.extend(parsed_cards[:MAX_FLASHCARDS_PER_CHUNK])
+
+    return flashcards
+
+
 @app.route("/")
 def serve_index() -> Any:
     return send_from_directory(app.static_folder, "index.html")
@@ -470,6 +606,39 @@ def record_progress() -> Any:
     write_json(PROGRESS_FILE, progress_entries[-500:])
 
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/documents/flashcards", methods=["POST"])
+def upload_document() -> Any:
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "MissingFile", "message": "No file provided."}), 400
+
+    try:
+        raw_text = normalize_text(extract_text_from_file(file))
+    except Exception as exc:
+        app.logger.exception("Failed to extract text from upload")
+        return jsonify({"error": "ExtractionFailed", "message": "Unable to read the uploaded file."}), 400
+
+    if not raw_text:
+        return jsonify({"error": "EmptyDocument", "message": "No readable text found in the file."}), 400
+
+    chunks = split_text(raw_text)
+    try:
+        flashcards = call_openai_flashcards(chunks, file.filename or "document")
+    except Exception as exc:  # pragma: no cover - depends on network/API
+        app.logger.exception("Flashcard generation failed")
+        return (
+            jsonify({"error": "GenerationFailed", "message": "Flashcard generation is unavailable right now."}),
+            502,
+        )
+
+    return jsonify(
+        {
+            "flashcards": flashcards,
+            "metadata": {"source": file.filename, "chunkCount": len(chunks)},
+        }
+    )
 
 
 @app.route("/<path:path>")

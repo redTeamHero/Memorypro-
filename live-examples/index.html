@@ -95,6 +95,18 @@
             <div id="textbook-search-results" class="ai-results" role="list"></div>
             <div id="textbook-chapter-list" class="ai-chapters" role="list"></div>
             <div id="textbook-flashcard-preview" class="ai-flashcards" aria-live="polite"></div>
+
+            <div class="ai-file-uploader" aria-label="Upload document for flashcards">
+              <h3>Upload a document</h3>
+              <p class="section-sub">Drop in a PDF, DOCX, or text file and let AI create flashcards.</p>
+              <div class="ai-upload-row">
+                <label class="sr-only" for="doc-upload-input">Upload PDF, DOCX, or TXT</label>
+                <input id="doc-upload-input" type="file" accept=".pdf,.doc,.docx,.txt" />
+                <button id="doc-upload-button" type="button" class="primary-button">Upload &amp; generate</button>
+              </div>
+              <p id="doc-upload-status" class="helper-text ai-status" aria-live="polite"></p>
+              <div id="doc-flashcard-preview" class="ai-flashcards" aria-live="polite"></div>
+            </div>
           </div>
 
 

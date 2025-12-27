@@ -228,6 +228,30 @@ body {
   margin-top: 10px;
 }
 
+.ai-file-uploader {
+  margin-top: 12px;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.ai-upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.ai-upload-row input[type="file"] {
+  flex: 1 1 260px;
+}
+
+.ai-tags {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
 .manual-entry {
   background: rgba(255, 255, 255, 0.95);
 }
