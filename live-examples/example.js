@@ -31,12 +31,16 @@ var API_BASE_URL = (function() {
         parsed.port = '5000';
         return parsed.origin;
       }
+
+      if (parsed.port === '5000' || !parsed.port) {
+        return parsed.origin.replace(/\/+$/, '');
+      }
     } catch (error) {
       console.warn('Could not determine API base URL from window location.', error);
     }
   }
 
-  return '';
+  return 'http://localhost:5000';
 })();
 
 var domRefs = {
