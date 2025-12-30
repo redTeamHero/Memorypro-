@@ -2,10 +2,11 @@ import json
 import os
 import re
 from collections import Counter
+from copy import deepcopy
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import requests
 from docx import Document
@@ -19,9 +20,13 @@ FRONTEND_DIR = (BASE_DIR.parent / "live-examples").resolve()
 DATA_DIR = BASE_DIR / "data"
 DEFAULT_DECK_FILE = DATA_DIR / "default_deck.json"
 PROGRESS_FILE = DATA_DIR / "progress.json"
+LEARNING_PATH_FILE = DATA_DIR / "learning_paths.json"
+LEARNER_PROGRESS_FILE = DATA_DIR / "learner_progress.json"
 DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 MAX_CHARS_PER_CHUNK = 5500
 MAX_FLASHCARDS_PER_CHUNK = 20
+DIFFICULTY_ORDER: Tuple[str, str, str] = ("medium", "expert", "professor")
+DIFFICULTY_STREAKS: Dict[str, int] = {"medium": 1, "expert": 2, "professor": 3}
 
 GOOGLE_BOOKS_SEARCH_URL = "https://www.googleapis.com/books/v1/volumes"
 GOOGLE_BOOKS_DEFAULT_LIMIT = 5
@@ -86,10 +91,35 @@ def write_json(path: Path, payload: Any) -> None:
         handle.write("\n")
 
 
+def load_learning_paths() -> Dict[str, Any]:
+    return load_json(LEARNING_PATH_FILE, default={})
+
+
+def save_learning_paths(paths: Dict[str, Any]) -> None:
+    write_json(LEARNING_PATH_FILE, paths)
+
+
+def load_learner_progress() -> List[Dict[str, Any]]:
+    return load_json(LEARNER_PROGRESS_FILE, default=[])
+
+
+def save_learner_progress(entries: List[Dict[str, Any]]) -> None:
+    write_json(LEARNER_PROGRESS_FILE, entries)
+
+
 def normalize_text(value: Optional[str]) -> str:
     if not value:
         return ""
     return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def normalize_answer_list(answers: Sequence[str]) -> List[str]:
+    normalized: List[str] = []
+    for answer in answers:
+        cleaned = normalize_text(answer)
+        if cleaned and cleaned not in normalized:
+            normalized.append(cleaned)
+    return normalized
 
 
 def split_text(text: str, max_chars: int = MAX_CHARS_PER_CHUNK) -> List[str]:
@@ -119,6 +149,344 @@ def keyword_to_title(keyword: str) -> str:
     if not normalized:
         return "Overview"
     return normalized.title()
+
+
+def parse_bool(value: Any) -> Optional[bool]:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"true", "1", "yes", "y"}:
+            return True
+        if lowered in {"false", "0", "no", "n"}:
+            return False
+    return None
+
+
+def validate_base_question(base_question: Dict[str, Any]) -> Optional[str]:
+    question_text = normalize_text(base_question.get("question_text"))
+    correct_answer = normalize_text(base_question.get("correct_answer"))
+    incorrect_answers = normalize_answer_list(base_question.get("incorrect_answers", []))
+
+    if not question_text:
+        return "Each base question requires question_text."
+    if not correct_answer:
+        return "Each base question requires correct_answer."
+    if len(incorrect_answers) < 3:
+        return "Each base question needs at least three incorrect_answers to satisfy all difficulty rules."
+    return None
+
+
+def select_distractors(incorrect_answers: List[str], required: int = 3) -> List[str]:
+    if len(incorrect_answers) >= required:
+        return incorrect_answers[:required]
+    padded = incorrect_answers[:]
+    while len(padded) < required:
+        padded.append(incorrect_answers[len(padded) % len(incorrect_answers)])
+    return padded
+
+
+def build_choices_for_difficulty(
+    base_question: Dict[str, Any],
+    difficulty: str,
+) -> List[Dict[str, Any]]:
+    correct_answer = normalize_text(base_question.get("correct_answer"))
+    incorrect_answers = select_distractors(normalize_answer_list(base_question.get("incorrect_answers", [])), 3)
+
+    if difficulty not in DIFFICULTY_ORDER:
+        return []
+
+    choice_plan: List[Tuple[str, str]] = []
+
+    if difficulty == "medium":
+        choice_plan = [
+            (correct_answer, "correct"),
+            (incorrect_answers[0], "close"),
+            (incorrect_answers[1], "plausible"),
+            (incorrect_answers[2], "obvious"),
+        ]
+    elif difficulty == "expert":
+        choice_plan = [
+            (incorrect_answers[0], "similar"),
+            (correct_answer, "correct"),
+            (incorrect_answers[1], "parallel"),
+            (incorrect_answers[2], "edge"),
+        ]
+    else:  # professor
+        choice_plan = [
+            (incorrect_answers[1], "nuanced"),
+            (incorrect_answers[0], "ambiguous"),
+            (correct_answer, "precise"),
+            (incorrect_answers[2], "broad"),
+        ]
+
+    choices: List[Dict[str, Any]] = []
+    for text, flavor in choice_plan:
+        choices.append(
+            {
+                "text": text,
+                "correct": text == correct_answer,
+                "distractor_kind": flavor if text != correct_answer else "answer",
+            }
+        )
+
+    return choices
+
+
+def mutate_question_text(question_text: str, difficulty: str, attempt_seed: int) -> str:
+    base = normalize_text(question_text)
+    if not base:
+        return ""
+
+    medium_templates = [
+        "Recall check: {q}",
+        "Quick review: {q}",
+        "Memory probe: {q}",
+    ]
+    expert_templates = [
+        "Apply and differentiate: {q}",
+        "Connect details: {q}",
+        "Test comprehension: {q}",
+    ]
+    professor_templates = [
+        "Disambiguate precisely: {q}",
+        "Focus on scope and exceptions: {q}",
+        "Select the most exact statement: {q}",
+    ]
+
+    templates_map = {
+        "medium": medium_templates,
+        "expert": expert_templates,
+        "professor": professor_templates,
+    }
+
+    templates = templates_map.get(difficulty, [ "{q}" ])
+    if not templates:
+        return base
+
+    index = attempt_seed % len(templates)
+    return templates[index].format(q=base)
+
+
+def build_mode_question(
+    base_question: Dict[str, Any],
+    difficulty: str,
+    attempt_seed: int = 0,
+) -> Dict[str, Any]:
+    return {
+        "difficulty": difficulty,
+        "question_text": mutate_question_text(base_question.get("question_text", ""), difficulty, attempt_seed),
+        "choices": build_choices_for_difficulty(base_question, difficulty),
+        "base_question": {
+            "question_text": normalize_text(base_question.get("question_text")),
+            "correct_answer": normalize_text(base_question.get("correct_answer")),
+            "incorrect_answers": normalize_answer_list(base_question.get("incorrect_answers", [])),
+        },
+    }
+
+
+def build_concept_modes(base_questions: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    modes: Dict[str, List[Dict[str, Any]]] = {"medium": [], "expert": [], "professor": []}
+    for base_question in base_questions:
+        for difficulty in DIFFICULTY_ORDER:
+            modes[difficulty].append(build_mode_question(base_question, difficulty, attempt_seed=0))
+    return modes
+
+
+def initialize_progress_entry(user_id: str, topic_id: str, concept_id: str) -> Dict[str, Any]:
+    return {
+        "user_id": user_id,
+        "topic_id": topic_id,
+        "concept_id": concept_id,
+        "medium_passed": False,
+        "expert_passed": False,
+        "professor_passed": False,
+        "attempts": 0,
+        "current_difficulty": "medium",
+        "streak": 0,
+    }
+
+
+def downgrade_difficulty(current: str) -> str:
+    if current == "professor":
+        return "expert"
+    if current == "expert":
+        return "medium"
+    return "medium"
+
+
+def advance_difficulty(current: str) -> str:
+    if current == "medium":
+        return "expert"
+    if current == "expert":
+        return "professor"
+    return "professor"
+
+
+def apply_attempt_to_progress(entry: Dict[str, Any], is_correct: bool) -> Dict[str, Any]:
+    current_difficulty = entry.get("current_difficulty", "medium")
+    streak = entry.get("streak", 0)
+    entry["attempts"] = entry.get("attempts", 0) + 1
+
+    if is_correct:
+        streak += 1
+        required = DIFFICULTY_STREAKS.get(current_difficulty, 1)
+        if streak >= required:
+            if current_difficulty == "medium":
+                entry["medium_passed"] = True
+            elif current_difficulty == "expert":
+                entry["expert_passed"] = True
+            elif current_difficulty == "professor":
+                entry["professor_passed"] = True
+
+            entry["current_difficulty"] = advance_difficulty(current_difficulty)
+            streak = 0
+        entry["streak"] = streak
+        return entry
+
+    # incorrect path
+    entry["streak"] = 0
+    entry["current_difficulty"] = downgrade_difficulty(current_difficulty)
+    return entry
+
+
+def validate_learning_path_payload(payload: Dict[str, Any]) -> Optional[str]:
+    topic_id = normalize_text(payload.get("topic_id") or payload.get("topicId"))
+    if not topic_id:
+        return "A topic_id is required."
+
+    concepts = payload.get("concepts")
+    if not isinstance(concepts, list) or not concepts:
+        return "Provide at least one concept."
+
+    for concept in concepts:
+        concept_id = normalize_text(concept.get("concept_id") or concept.get("conceptId"))
+        if not concept_id:
+            return "Each concept requires concept_id."
+        base_questions = concept.get("base_questions") or concept.get("baseQuestions")
+        if not isinstance(base_questions, list) or not base_questions:
+            return f"Concept {concept_id} must include base_questions."
+        for base_question in base_questions:
+            error = validate_base_question(base_question)
+            if error:
+                return f"Concept {concept_id}: {error}"
+
+    return None
+
+
+def normalize_concept(concept: Dict[str, Any], order: int) -> Dict[str, Any]:
+    concept_id = normalize_text(concept.get("concept_id") or concept.get("conceptId"))
+    title = normalize_text(concept.get("title") or concept.get("name") or concept_id)
+    base_questions = concept.get("base_questions") or concept.get("baseQuestions") or []
+    normalized_base = []
+    for base_question in base_questions:
+        normalized_base.append(
+            {
+                "question_text": normalize_text(base_question.get("question_text")),
+                "correct_answer": normalize_text(base_question.get("correct_answer")),
+                "incorrect_answers": normalize_answer_list(base_question.get("incorrect_answers", [])),
+            }
+        )
+
+    return {
+        "concept_id": concept_id,
+        "title": title,
+        "order": order,
+        "base_questions": normalized_base,
+        "modes": build_concept_modes(normalized_base),
+    }
+
+
+def build_learning_path_from_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    topic_id = normalize_text(payload.get("topic_id") or payload.get("topicId"))
+    topic_name = normalize_text(payload.get("topic_name") or payload.get("topicName") or topic_id)
+    description = normalize_text(payload.get("description"))
+    concepts = payload.get("concepts", [])
+
+    normalized_concepts = [normalize_concept(concept, order=index + 1) for index, concept in enumerate(concepts)]
+
+    return {
+        "topic_id": topic_id,
+        "topic_name": topic_name,
+        "description": description,
+        "concepts": normalized_concepts,
+        "rules": {
+            "difficulty_order": list(DIFFICULTY_ORDER),
+            "streak_requirements": DIFFICULTY_STREAKS,
+            "unlock": "sequential",
+        },
+        "created_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+def map_progress_by_concept(entries: List[Dict[str, Any]], topic_id: str, user_id: Optional[str]) -> Dict[str, Dict[str, Any]]:
+    progress_map: Dict[str, Dict[str, Any]] = {}
+    for entry in entries:
+        if normalize_text(entry.get("topic_id")) != topic_id:
+            continue
+        if user_id and normalize_text(entry.get("user_id")) != user_id:
+            continue
+        concept_id = normalize_text(entry.get("concept_id"))
+        if concept_id:
+            progress_map[concept_id] = entry
+    return progress_map
+
+
+def attach_states_to_path(path: Dict[str, Any], progress_entries: List[Dict[str, Any]], user_id: Optional[str]) -> Dict[str, Any]:
+    decorated = deepcopy(path)
+    progress_map = map_progress_by_concept(progress_entries, decorated.get("topic_id", ""), user_id)
+
+    previous_mastered = True
+    ordered_concepts = sorted(decorated.get("concepts", []), key=lambda c: c.get("order", 0))
+
+    for concept in ordered_concepts:
+        concept_id = concept.get("concept_id")
+        progress = progress_map.get(concept_id)
+        unlocked = previous_mastered
+        state = "locked"
+
+        if unlocked:
+            if progress and progress.get("professor_passed"):
+                state = "mastered"
+                previous_mastered = True
+            elif progress and progress.get("expert_passed"):
+                state = "completed"
+                previous_mastered = False
+            else:
+                state = "active"
+                previous_mastered = False
+        else:
+            previous_mastered = False
+
+        concept["state"] = state
+        concept["active_difficulty"] = progress.get("current_difficulty", "medium") if progress else "medium"
+        concept["attempts"] = progress.get("attempts", 0) if progress else 0
+        concept["progress"] = progress or None
+
+    decorated["concepts"] = ordered_concepts
+    return decorated
+
+
+def pick_next_question_variant(concept: Dict[str, Any], difficulty: str, attempt_seed: int) -> Dict[str, Any]:
+    base_questions = concept.get("base_questions") or []
+    if not base_questions:
+        return {}
+
+    index = attempt_seed % len(base_questions)
+    base_question = base_questions[index]
+    return build_mode_question(base_question, difficulty, attempt_seed=attempt_seed)
+
+
+def build_failure_rationale(base_question: Dict[str, Any], difficulty: str) -> Dict[str, str]:
+    correct_answer = normalize_text(base_question.get("correct_answer"))
+    question_text = normalize_text(base_question.get("question_text"))
+    return {
+        "message": "Review the distinction and retry with adjusted wording.",
+        "correct_answer": correct_answer,
+        "reference_question": mutate_question_text(question_text, difficulty, attempt_seed=1),
+    }
+
+
 
 
 def extract_keywords(text: str, limit: int = 6) -> List[str]:
@@ -472,6 +840,48 @@ def get_default_deck() -> Any:
     return jsonify(deck)
 
 
+@app.route("/api/learning-paths", methods=["GET"])
+def list_learning_paths() -> Any:
+    paths = load_learning_paths()
+    return jsonify({"learning_paths": list(paths.values())})
+
+
+@app.route("/api/learning-paths", methods=["POST"])
+def create_learning_path() -> Any:
+    payload = request.get_json(force=True, silent=True) or {}
+    validation_error = validate_learning_path_payload(payload)
+
+    if validation_error:
+        return jsonify({"error": "InvalidLearningPath", "message": validation_error}), 400
+
+    learning_path = build_learning_path_from_payload(payload)
+    stored_paths = load_learning_paths()
+    stored_paths[learning_path["topic_id"]] = learning_path
+    save_learning_paths(stored_paths)
+
+    return jsonify({"learning_path": learning_path})
+
+
+@app.route("/api/learning-paths/<topic_id>", methods=["GET"])
+def get_learning_path(topic_id: str) -> Any:
+    resolved_topic = normalize_text(topic_id)
+    if not resolved_topic:
+        return jsonify({"error": "InvalidTopic", "message": "A valid topic_id is required."}), 400
+
+    user_id = normalize_text(request.args.get("user_id") or request.args.get("userId"))
+    stored_paths = load_learning_paths()
+    learning_path = stored_paths.get(resolved_topic)
+
+    if not learning_path:
+        return jsonify({"error": "NotFound", "message": "No learning path found for this topic."}), 404
+
+    if user_id:
+        progress_entries = load_learner_progress()
+        learning_path = attach_states_to_path(learning_path, progress_entries, user_id)
+
+    return jsonify({"learning_path": learning_path})
+
+
 @app.route("/api/textbooks/search", methods=["GET"])
 def search_textbooks() -> Any:
     query = normalize_text(request.args.get("q") or request.args.get("query"))
@@ -585,6 +995,109 @@ def create_textbook_flashcards() -> Any:
     )
 
 
+@app.route("/api/learning-paths/progress", methods=["GET"])
+def get_learning_progress() -> Any:
+    user_id = normalize_text(request.args.get("user_id") or request.args.get("userId"))
+    topic_id = normalize_text(request.args.get("topic_id") or request.args.get("topicId"))
+
+    entries = load_learner_progress()
+    filtered: List[Dict[str, Any]] = []
+
+    for entry in entries:
+        if user_id and normalize_text(entry.get("user_id")) != user_id:
+            continue
+        if topic_id and normalize_text(entry.get("topic_id")) != topic_id:
+            continue
+        filtered.append(entry)
+
+    return jsonify({"progress": filtered})
+
+
+@app.route("/api/learning-paths/progress", methods=["POST"])
+def update_learning_progress() -> Any:
+    payload = request.get_json(force=True, silent=True) or {}
+    user_id = normalize_text(payload.get("user_id") or payload.get("userId"))
+    topic_id = normalize_text(payload.get("topic_id") or payload.get("topicId"))
+    concept_id = normalize_text(payload.get("concept_id") or payload.get("conceptId"))
+    is_correct_value = payload.get("is_correct", payload.get("isCorrect"))
+    is_correct = parse_bool(is_correct_value)
+
+    if not user_id or not topic_id or not concept_id:
+        return jsonify({"error": "MissingFields", "message": "user_id, topic_id, and concept_id are required."}), 400
+    if is_correct is None:
+        return jsonify({"error": "MissingOutcome", "message": "is_correct must be provided as true or false."}), 400
+
+    stored_paths = load_learning_paths()
+    learning_path = stored_paths.get(topic_id)
+    if not learning_path:
+        return jsonify({"error": "NotFound", "message": "No learning path found for this topic."}), 404
+
+    ordered_concepts = sorted(learning_path.get("concepts", []), key=lambda c: c.get("order", 0))
+    concept_lookup = {concept.get("concept_id"): concept for concept in ordered_concepts}
+    concept = concept_lookup.get(concept_id)
+
+    if not concept:
+        return jsonify({"error": "NotFound", "message": "Concept not found in learning path."}), 404
+
+    progress_entries = load_learner_progress()
+    progress_map = map_progress_by_concept(progress_entries, topic_id, user_id)
+
+    current_index = next((idx for idx, item in enumerate(ordered_concepts) if item.get("concept_id") == concept_id), None)
+    if current_index is None:
+        return jsonify({"error": "NotFound", "message": "Concept not found."}), 404
+
+    if current_index > 0:
+        previous_concept = ordered_concepts[current_index - 1]
+        previous_progress = progress_map.get(previous_concept.get("concept_id"))
+        if not (previous_progress and previous_progress.get("professor_passed")):
+            return jsonify({"error": "Locked", "message": "Previous concept must be mastered before unlocking this one."}), 409
+
+    progress_entry = progress_map.get(concept_id)
+    if not progress_entry:
+        progress_entry = initialize_progress_entry(user_id, topic_id, concept_id)
+
+    progress_entry = apply_attempt_to_progress(progress_entry, is_correct)
+
+    updated_entries: List[Dict[str, Any]] = []
+    for entry in progress_entries:
+        if (
+            normalize_text(entry.get("user_id")) == user_id
+            and normalize_text(entry.get("topic_id")) == topic_id
+            and normalize_text(entry.get("concept_id")) == concept_id
+        ):
+            continue
+        updated_entries.append(entry)
+    updated_entries.append(progress_entry)
+
+    save_learner_progress(updated_entries)
+
+    decorated_path = attach_states_to_path(learning_path, updated_entries, user_id)
+    concept_state = next(
+        (concept for concept in decorated_path.get("concepts", []) if concept.get("concept_id") == concept_id),
+        None,
+    )
+    next_question = pick_next_question_variant(
+        concept,
+        progress_entry.get("current_difficulty", "medium"),
+        progress_entry.get("attempts", 0),
+    )
+    failure_rationale = None
+    if not is_correct and concept.get("base_questions"):
+        seed_index = progress_entry.get("attempts", 1)
+        base_questions = concept.get("base_questions") or []
+        base_question = base_questions[seed_index % len(base_questions)]
+        failure_rationale = build_failure_rationale(base_question, progress_entry.get("current_difficulty", "medium"))
+
+    return jsonify(
+        {
+            "progress": progress_entry,
+            "concept_state": concept_state,
+            "next_question": next_question,
+            "rationale": failure_rationale,
+        }
+    )
+
+
 @app.route("/api/progress", methods=["GET"])
 def get_progress() -> Any:
     progress_entries: List[Dict[str, Any]] = load_json(PROGRESS_FILE, default=[])
@@ -654,5 +1167,9 @@ if __name__ == "__main__":
         )
     if not PROGRESS_FILE.exists():
         write_json(PROGRESS_FILE, [])
+    if not LEARNING_PATH_FILE.exists():
+        write_json(LEARNING_PATH_FILE, {})
+    if not LEARNER_PROGRESS_FILE.exists():
+        write_json(LEARNER_PROGRESS_FILE, [])
 
     app.run(host="0.0.0.0", port=5000)
