@@ -109,10 +109,10 @@
               />
               <button id="search-textbook-button" type="button" class="primary-button">Search textbooks </button>
             </div>
-            <p id="textbook-search-status" class="helper-text ai-status" aria-live="polite"></p>
-            <div id="textbook-search-results" class="ai-results" role="list"></div>
-            <div id="textbook-chapter-list" class="ai-chapters" role="list"></div>
-            <div id="textbook-flashcard-preview" class="ai-flashcards" aria-live="polite"></div>
+              <p id="textbook-search-status" class="helper-text ai-status" aria-live="polite"></p>
+              <div id="textbook-search-results" class="ai-results" role="list"></div>
+              <div id="textbook-chapter-list" class="ai-chapters" role="list"></div>
+              <div id="textbook-flashcard-preview" class="ai-flashcards" aria-live="polite"></div>
 
             <div class="ai-file-uploader" aria-label="Upload document for flashcards">
               <h3>Upload a document</h3>
@@ -127,6 +127,24 @@
             </div>
           </div>
 
+          <div class="card-section ai-topic-generator" aria-label="AI topic flashcards">
+            <header class="section-heading">
+              <h2>Instant flashcards from a topic </h2>
+              <p class="section-sub">Type any subject and let AI create a fresh deck automatically.</p>
+            </header>
+            <div class="ai-topic-row">
+              <label class="sr-only" for="topic-input">Topic</label>
+              <input
+                id="topic-input"
+                type="text"
+                autocomplete="off"
+                placeholder="Photosynthesis basics"
+              />
+              <button id="generate-topic-button" type="button" class="primary-button">Generate flashcards</button>
+            </div>
+            <p id="topic-status" class="helper-text ai-status" aria-live="polite"></p>
+            <div id="topic-flashcard-preview" class="ai-flashcards" aria-live="polite"></div>
+          </div>
 
         </section>
 

@@ -18,6 +18,12 @@ var docUploadState = {
   source: '',
 };
 
+var topicGenerationState = {
+  flashcards: [],
+  topic: '',
+  difficulty: '',
+};
+
 var learningPathState = {
   data: null,
 };
@@ -129,6 +135,10 @@ var domRefs = {
   docUploadButton: null,
   docUploadStatus: null,
   docFlashcardPreview: null,
+  topicInput: null,
+  topicGenerateButton: null,
+  topicFlashcardPreview: null,
+  topicStatus: null,
   learningPathRoot: null,
 };
 
@@ -227,6 +237,10 @@ function cacheDom() {
   domRefs.docUploadButton = document.getElementById('doc-upload-button');
   domRefs.docUploadStatus = document.getElementById('doc-upload-status');
   domRefs.docFlashcardPreview = document.getElementById('doc-flashcard-preview');
+  domRefs.topicInput = document.getElementById('topic-input');
+  domRefs.topicGenerateButton = document.getElementById('generate-topic-button');
+  domRefs.topicFlashcardPreview = document.getElementById('topic-flashcard-preview');
+  domRefs.topicStatus = document.getElementById('topic-status');
   domRefs.learningPathRoot = document.getElementById('learning-path-root');
 }
 
@@ -853,6 +867,16 @@ function bindHandlers() {
   }
 
   attachActivate(domRefs.docUploadButton, safelyHandleDocumentUpload);
+  attachActivate(domRefs.topicGenerateButton, safelyGenerateTopicFlashcards);
+
+  if (domRefs.topicInput) {
+    domRefs.topicInput.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        safelyGenerateTopicFlashcards();
+      }
+    });
+  }
 }
 
 function handleTextbookQueryInput() {
@@ -904,6 +928,19 @@ function safelyHandleDocumentUpload() {
     }
 
     setDocUploadStatus(message, 'error');
+  });
+}
+
+function safelyGenerateTopicFlashcards() {
+  generateTopicFlashcards().catch(function(error) {
+    console.error('Failed to generate topic flashcards.', error);
+    var message = 'Unable to generate flashcards for that topic right now.';
+
+    if (error && error.message) {
+      message += ' ' + error.message;
+    }
+
+    setTopicStatus(message, 'error');
   });
 }
 
@@ -987,6 +1024,66 @@ async function handleDocumentUpload() {
     setDocUploadStatus('Generated ' + flashcards.length + ' flashcards from "' + sourceLabel + '".', 'success');
   } else {
     setDocUploadStatus('No flashcards were generated. Try another document.', 'error');
+  }
+}
+
+async function generateTopicFlashcards() {
+  if (!domRefs.topicInput) {
+    return;
+  }
+
+  var topic = normalizeString(domRefs.topicInput.value || '').trim();
+
+  if (!topic) {
+    setTopicStatus('Enter a topic to generate flashcards.', 'error');
+    return;
+  }
+
+  setTopicStatus('Generating flashcards for "' + topic + '"…', null);
+  renderTopicFlashcards(null);
+
+  var response = await apiFetch('/api/generate-flashcards', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic: topic }),
+  });
+
+  var payload = await response.json();
+  var cards = Array.isArray(payload.flashcards) ? payload.flashcards : [];
+  var difficulty = typeof payload.difficulty === 'string' ? payload.difficulty : 'beginner';
+  var normalized = cards
+    .map(function(card, index) {
+      var front = normalizeString(card.front || card.question || '');
+      var back = normalizeString(card.back || card.answer || '');
+
+      if (!front || !back) {
+        return null;
+      }
+
+      return {
+        question: front,
+        answer: back,
+        example: card.example || '',
+        category: card.category || '',
+        id: card.id || 'auto-' + (index + 1),
+      };
+    })
+    .filter(Boolean);
+
+  topicGenerationState.flashcards = normalized;
+  topicGenerationState.topic = payload.topic || topic;
+  topicGenerationState.difficulty = difficulty;
+
+  renderTopicFlashcards({
+    flashcards: normalized,
+    topic: topicGenerationState.topic,
+    difficulty: topicGenerationState.difficulty,
+  });
+
+  if (normalized.length) {
+    setTopicStatus('Generated ' + normalized.length + ' flashcards for "' + topicGenerationState.topic + '".', 'success');
+  } else {
+    setTopicStatus('No flashcards were generated. Try a different topic.', 'error');
   }
 }
 
@@ -1529,6 +1626,107 @@ function renderDocFlashcards(payload) {
   domRefs.docFlashcardPreview.appendChild(actions);
 }
 
+function renderTopicFlashcards(payload) {
+  if (!domRefs.topicFlashcardPreview) {
+    return;
+  }
+
+  domRefs.topicFlashcardPreview.innerHTML = '';
+
+  var data = payload && typeof payload === 'object' ? payload : null;
+  var flashcards = data && Array.isArray(data.flashcards) ? data.flashcards : [];
+
+  if (!flashcards.length) {
+    return;
+  }
+
+  var heading = document.createElement('div');
+  heading.className = 'ai-result-header';
+
+  var label = document.createElement('p');
+  label.className = 'ai-result-title';
+  var topicLabel = data.topic ? '“' + data.topic + '”' : 'this topic';
+  label.textContent = 'Flashcards for ' + topicLabel;
+  heading.appendChild(label);
+
+  if (data.difficulty) {
+    var meta = document.createElement('p');
+    meta.className = 'ai-result-meta';
+    meta.textContent = 'Difficulty: ' + data.difficulty;
+    heading.appendChild(meta);
+  }
+
+  domRefs.topicFlashcardPreview.appendChild(heading);
+
+  var list = document.createElement('ol');
+  list.className = 'ai-flashcards-list';
+
+  flashcards.forEach(function(card, index) {
+    if (!card) {
+      return;
+    }
+
+    var item = document.createElement('li');
+    var question = document.createElement('strong');
+    question.textContent = 'Q' + (index + 1) + ': ' + summarizeCardText(card.question || card.front || '', 140);
+    item.appendChild(question);
+
+    if (card.answer || card.back) {
+      var answer = document.createElement('div');
+      answer.textContent = 'A: ' + summarizeCardText(card.answer || card.back || '', 200);
+      item.appendChild(answer);
+    }
+
+    list.appendChild(item);
+  });
+
+  domRefs.topicFlashcardPreview.appendChild(list);
+
+  var actions = document.createElement('div');
+  actions.className = 'ai-flashcards-actions';
+
+  var importButton = document.createElement('button');
+  importButton.type = 'button';
+  importButton.className = 'primary-button';
+  importButton.textContent = 'Add ' + flashcards.length + ' cards to active set';
+  importButton.addEventListener('click', importTopicFlashcards);
+
+  actions.appendChild(importButton);
+  domRefs.topicFlashcardPreview.appendChild(actions);
+}
+
+function importTopicFlashcards() {
+  if (!topicGenerationState.flashcards || !topicGenerationState.flashcards.length) {
+    setTopicStatus('Generate flashcards from a topic before importing.', 'error');
+    return;
+  }
+
+  var addedCount = 0;
+
+  topicGenerationState.flashcards.forEach(function(card) {
+    var added = addCardToDeck({ question: card.question, answer: card.answer });
+
+    if (added) {
+      addedCount += 1;
+    }
+  });
+
+  if (!addedCount) {
+    setTopicStatus('No new flashcards were added to the set.', 'error');
+    return;
+  }
+
+  refreshManualEditorOptions({ preserveSelection: false });
+  updateManualEditorButtonState();
+  updateFooter();
+  updateJsonPreview();
+  updateSessionControls();
+  presentCurrentCard(false);
+
+  var activeSet = getActiveSetLabel();
+  setTopicStatus('Added ' + addedCount + ' flashcards into "' + activeSet + '".', 'success');
+}
+
 function setTextbookStatus(message, variant) {
   if (!domRefs.textbookStatus) {
     return;
@@ -1556,6 +1754,21 @@ function setDocUploadStatus(message, variant) {
     domRefs.docUploadStatus.classList.add('status-error');
   } else if (variant === 'success') {
     domRefs.docUploadStatus.classList.add('status-success');
+  }
+}
+
+function setTopicStatus(message, variant) {
+  if (!domRefs.topicStatus) {
+    return;
+  }
+
+  domRefs.topicStatus.textContent = message || '';
+  domRefs.topicStatus.classList.remove('status-error', 'status-success');
+
+  if (variant === 'error') {
+    domRefs.topicStatus.classList.add('status-error');
+  } else if (variant === 'success') {
+    domRefs.topicStatus.classList.add('status-success');
   }
 }
 
