@@ -763,6 +763,294 @@ body {
   letter-spacing: 0.04em;
 }
 
+.learning-path {
+  border-color: rgba(88, 204, 2, 0.2);
+  background: linear-gradient(145deg, rgba(28, 176, 246, 0.04), rgba(88, 204, 2, 0.05));
+  position: relative;
+  overflow: hidden;
+}
+
+.learning-path::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 12% 18%, rgba(28, 176, 246, 0.14), transparent 32%),
+    radial-gradient(circle at 86% 24%, rgba(124, 58, 237, 0.12), transparent 30%),
+    radial-gradient(circle at 48% 72%, rgba(250, 204, 21, 0.12), transparent 38%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.learning-path > * {
+  position: relative;
+  z-index: 1;
+}
+
+.learning-path-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.learning-path-topic .eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+
+.learning-path-legend {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.legend-pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #0f172a;
+}
+
+.legend-pill.medium {
+  background: rgba(28, 176, 246, 0.18);
+  color: var(--blue-dark);
+}
+
+.legend-pill.expert {
+  background: rgba(234, 179, 8, 0.18);
+  color: #854d0e;
+}
+
+.legend-pill.professor {
+  background: rgba(124, 58, 237, 0.16);
+  color: #5b21b6;
+}
+
+.legend-pill.mastered {
+  background: rgba(250, 204, 21, 0.22);
+  color: #92400e;
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.28);
+}
+
+.learning-path-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.concept-node {
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.98);
+  display: grid;
+  gap: 12px;
+  position: relative;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.concept-node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.12);
+}
+
+.concept-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.concept-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.mastery-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.18);
+  color: #92400e;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.35), 0 8px 18px rgba(250, 204, 21, 0.26);
+}
+
+.difficulty-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.difficulty-level {
+  position: relative;
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.9);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-dark);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.difficulty-level:focus-visible {
+  outline: 3px solid rgba(28, 176, 246, 0.35);
+  outline-offset: 2px;
+}
+
+.difficulty-level .level-label {
+  display: grid;
+  gap: 4px;
+}
+
+.level-title {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.82rem;
+}
+
+.level-state {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.status-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.level-mode-medium {
+  border-color: rgba(28, 176, 246, 0.25);
+  background: radial-gradient(circle at 12% 20%, rgba(28, 176, 246, 0.12), transparent 40%), rgba(235, 248, 255, 0.9);
+}
+
+.level-mode-medium .status-icon {
+  color: var(--blue-dark);
+  background: rgba(28, 176, 246, 0.1);
+}
+
+.level-mode-expert {
+  border-color: rgba(234, 179, 8, 0.32);
+  background: radial-gradient(circle at 14% 26%, rgba(234, 179, 8, 0.16), transparent 44%), rgba(255, 251, 235, 0.94);
+}
+
+.level-mode-expert .status-icon {
+  color: #92400e;
+  background: rgba(234, 179, 8, 0.16);
+}
+
+.level-mode-professor {
+  border-color: rgba(124, 58, 237, 0.28);
+  background: radial-gradient(circle at 14% 26%, rgba(124, 58, 237, 0.14), transparent 46%), rgba(250, 245, 255, 0.94);
+}
+
+.level-mode-professor .status-icon {
+  color: #5b21b6;
+  background: rgba(124, 58, 237, 0.16);
+}
+
+.difficulty-level.state-locked {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.difficulty-level.state-locked .level-state {
+  color: #9ca3af;
+}
+
+.difficulty-level.state-active {
+  cursor: pointer;
+  box-shadow: 0 10px 20px rgba(28, 176, 246, 0.12);
+  animation: levelPulse 3.5s ease-in-out infinite;
+}
+
+.difficulty-level.state-active:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 26px rgba(28, 176, 246, 0.18);
+}
+
+.difficulty-level.state-completed {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.35);
+  animation: successPop 420ms ease;
+}
+
+.difficulty-level.state-completed .status-icon {
+  color: #065f46;
+  background: rgba(16, 185, 129, 0.16);
+}
+
+.concept-node.concept-mastered {
+  border-color: rgba(250, 204, 21, 0.38);
+  box-shadow: 0 18px 28px rgba(250, 204, 21, 0.22);
+  background: linear-gradient(145deg, rgba(255, 252, 232, 0.95), rgba(255, 244, 189, 0.96));
+}
+
+.concept-node.concept-mastered::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.35), 0 0 40px rgba(250, 204, 21, 0.4);
+  pointer-events: none;
+}
+
+.concept-node .subtext {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+@keyframes levelPulse {
+  0% {
+    box-shadow: 0 10px 20px rgba(28, 176, 246, 0.12);
+  }
+  50% {
+    box-shadow: 0 18px 30px rgba(28, 176, 246, 0.2);
+  }
+  100% {
+    box-shadow: 0 10px 20px rgba(28, 176, 246, 0.12);
+  }
+}
+
+@keyframes successPop {
+  0% {
+    transform: scale(0.98);
+  }
+  70% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 @media (max-width: 640px) {
   .flashcard {
     padding: 24px;
