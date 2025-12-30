@@ -64,6 +64,36 @@ These steps are sufficient for experimenting with the library and modifying the 
 
 These steps are sufficient for experimenting with the library and modifying the example flashcards locally.
 
+### Generate JSON-ready flashcards from any topic
+
+The backend can produce structured flashcards from a simple topic prompt—useful for the Memorypro UI or any external client that wants strictly formatted cards.
+
+```
+POST /api/topics/flashcards
+Body: { "topic": "Neural networks", "difficulty": "beginner" }
+```
+
+Response:
+
+```
+{
+  "topic": "Neural networks",
+  "difficulty": "beginner",
+  "flashcards": [
+    {
+      "id": "auto-1",
+      "front": "What is a neural network?",
+      "back": "A model inspired by interconnected neurons that maps inputs to outputs via weighted layers.",
+      "example": "",
+      "category": "definition"
+    },
+    ...
+  ]
+}
+```
+
+Difficulty can be `beginner`, `intermediate`, or `expert`, and an `OPENAI_API_KEY` environment variable is required for generation.
+
 ## Using Memorypro
 
 ### As a jQuery plugin
