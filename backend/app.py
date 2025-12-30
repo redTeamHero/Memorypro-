@@ -794,6 +794,16 @@ def create_topic_flashcards() -> Any:
     return jsonify(generated)
 
 
+@app.route("/api/generate-flashcards", methods=["POST"])
+def generate_flashcards_alias() -> Any:
+    """Legacy-compatible endpoint for topic-based flashcards.
+
+    Mirrors /api/topics/flashcards so frontends can call either route.
+    """
+
+    return create_topic_flashcards()
+
+
 @app.route("/api/progress", methods=["GET"])
 def get_progress() -> Any:
     progress_entries: List[Dict[str, Any]] = load_json(PROGRESS_FILE, default=[])
