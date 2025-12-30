@@ -22,6 +22,13 @@ PROGRESS_FILE = DATA_DIR / "progress.json"
 DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 MAX_CHARS_PER_CHUNK = 5500
 MAX_FLASHCARDS_PER_CHUNK = 20
+DEFAULT_TOPIC_DIFFICULTY = "beginner"
+TOPIC_DIFFICULTIES = {"beginner", "intermediate", "expert"}
+TOPIC_CARD_RANGES = {
+    "beginner": (10, 15),
+    "intermediate": (15, 25),
+    "expert": (20, 35),
+}
 
 GOOGLE_BOOKS_SEARCH_URL = "https://www.googleapis.com/books/v1/volumes"
 GOOGLE_BOOKS_DEFAULT_LIMIT = 5
@@ -399,6 +406,49 @@ Here’s the text:
 """
 
 
+def build_topic_flashcard_prompt(topic: str, difficulty: str) -> str:
+    safe_topic = normalize_text(topic) or "general knowledge"
+    safe_difficulty = difficulty if difficulty in TOPIC_DIFFICULTIES else DEFAULT_TOPIC_DIFFICULTY
+    min_cards, max_cards = TOPIC_CARD_RANGES.get(safe_difficulty, TOPIC_CARD_RANGES[DEFAULT_TOPIC_DIFFICULTY])
+
+    return (
+        "You are an expert educator, curriculum designer, and flashcard engine.\n\n"
+        "Objective: Build high-quality flashcards from a topic and difficulty.\n"
+        "Output ONLY valid JSON. No markdown, no commentary.\n\n"
+        f"Topic: {safe_topic}\n"
+        f"Difficulty: {safe_difficulty}\n"
+        "Rules:\n"
+        "- Content must be accurate, concise, and educational.\n"
+        "- Avoid fluff or repeated concepts.\n"
+        "- Use simple language with correct terminology.\n"
+        "- Prefer examples when useful.\n"
+        "- Beginner: definitions + fundamentals.\n"
+        "- Intermediate: usage + rules + comparisons.\n"
+        "- Expert: edge cases + pitfalls + advanced behavior.\n"
+        f"- Flashcard count: between {min_cards} and {max_cards} cards.\n\n"
+        "Output format (must match exactly):\n"
+        "{\n"
+        '  "topic": "<topic>",\n'
+        '  "difficulty": "<difficulty>",\n'
+        '  "flashcards": [\n'
+        "    {\n"
+        '      "id": "auto",\n'
+        '      "front": "Question, term, or prompt",\n'
+        '      "back": "Clear and concise answer",\n'
+        '      "example": "Optional short example or code snippet",\n'
+        '      "category": "definition | concept | example | rule | pitfall"\n'
+        "    }\n"
+        "  ]\n"
+        "}\n\n"
+        "Quality checklist:\n"
+        "- Every card tests one idea.\n"
+        "- No vague wording.\n"
+        "- No duplicates.\n"
+        "- Examples are short and correct.\n"
+        "- Output must be parseable JSON.\n"
+    )
+
+
 def parse_flashcard_response(raw_response: str, source: str) -> List[Dict[str, Any]]:
     cleaned = raw_response.strip()
     if cleaned.startswith("```"):
@@ -459,6 +509,123 @@ def call_openai_flashcards(chunks: Sequence[str], source: str) -> List[Dict[str,
         flashcards.extend(parsed_cards[:MAX_FLASHCARDS_PER_CHUNK])
 
     return flashcards
+
+
+def parse_topic_flashcard_response(raw_response: str, topic: str, difficulty: str) -> Dict[str, Any]:
+    cleaned = raw_response.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z]*", "", cleaned, count=1).strip()
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3].strip()
+
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return {"topic": topic, "difficulty": difficulty, "flashcards": []}
+
+    if not isinstance(data, dict):
+        return {"topic": topic, "difficulty": difficulty, "flashcards": []}
+
+    parsed_topic = normalize_text(data.get("topic")) or topic
+    parsed_difficulty = (normalize_text(data.get("difficulty")) or difficulty).lower()
+    flashcards = data.get("flashcards")
+
+    if not isinstance(flashcards, list):
+        flashcards = []
+
+    normalized_cards: List[Dict[str, Any]] = []
+    seen_fronts: set[str] = set()
+
+    min_cards, max_cards = TOPIC_CARD_RANGES.get(
+        parsed_difficulty, TOPIC_CARD_RANGES[DEFAULT_TOPIC_DIFFICULTY]
+    )
+
+    for idx, card in enumerate(flashcards):
+        if not isinstance(card, dict):
+            continue
+
+        front = normalize_text(card.get("front"))
+        back = normalize_text(card.get("back"))
+
+        if not front or not back:
+            continue
+
+        normalized_front = front.lower()
+        if normalized_front in seen_fronts:
+            continue
+        seen_fronts.add(normalized_front)
+
+        category = normalize_text(card.get("category")) or "concept"
+        example = normalize_text(card.get("example"))
+        card_id = normalize_text(card.get("id")) or f"auto-{idx + 1}"
+
+        normalized_cards.append(
+            {
+                "id": card_id,
+                "front": front,
+                "back": back,
+                "example": example,
+                "category": category,
+            }
+        )
+
+        if len(normalized_cards) >= max_cards:
+            break
+
+    if not normalized_cards:
+        normalized_cards.append(
+            {
+                "id": "auto-1",
+                "front": f"What is {parsed_topic}?",
+                "back": f"A concise overview of {parsed_topic}.",
+                "example": "",
+                "category": "definition",
+            }
+        )
+
+    limited_cards = normalized_cards[:max_cards]
+    return {"topic": parsed_topic, "difficulty": parsed_difficulty, "flashcards": limited_cards}
+
+
+def call_openai_topic_flashcards(topic: str, difficulty: str) -> Dict[str, Any]:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured.")
+
+    normalized_difficulty = (difficulty or DEFAULT_TOPIC_DIFFICULTY).lower()
+    if normalized_difficulty not in TOPIC_DIFFICULTIES:
+        normalized_difficulty = DEFAULT_TOPIC_DIFFICULTY
+
+    prompt = build_topic_flashcard_prompt(topic, normalized_difficulty)
+    client = OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
+        model=DEFAULT_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2,
+        max_tokens=1800,
+    )
+
+    content = response.choices[0].message.content if response.choices else "{}"
+    parsed = parse_topic_flashcard_response(content or "{}", topic, normalized_difficulty)
+
+    min_cards, _ = TOPIC_CARD_RANGES.get(
+        normalized_difficulty, TOPIC_CARD_RANGES[DEFAULT_TOPIC_DIFFICULTY]
+    )
+    if len(parsed.get("flashcards", [])) < min_cards:
+        missing = min_cards - len(parsed["flashcards"])
+        for index in range(missing):
+            parsed["flashcards"].append(
+                {
+                    "id": f"auto-fill-{index + 1}",
+                    "front": f"Key idea {index + 1} about {parsed['topic']}",
+                    "back": f"A core concept for {parsed['topic']} at the {normalized_difficulty} level.",
+                    "example": "",
+                    "category": "concept",
+                }
+            )
+        parsed["flashcards"] = parsed["flashcards"][: TOPIC_CARD_RANGES[normalized_difficulty][1]]
+
+    return parsed
 
 
 @app.route("/")
@@ -583,6 +750,48 @@ def create_textbook_flashcards() -> Any:
             },
         }
     )
+
+
+@app.route("/api/topics/flashcards", methods=["POST"])
+def create_topic_flashcards() -> Any:
+    payload = request.get_json(force=True, silent=True) or {}
+
+    topic = normalize_text(payload.get("topic"))
+    difficulty_raw = normalize_text(payload.get("difficulty")) or DEFAULT_TOPIC_DIFFICULTY
+    difficulty = difficulty_raw.lower()
+
+    if not topic:
+        return (
+            jsonify({"error": "MissingTopic", "message": "Provide a topic to generate flashcards."}),
+            400,
+        )
+
+    if difficulty not in TOPIC_DIFFICULTIES:
+        return (
+            jsonify(
+                {
+                    "error": "InvalidDifficulty",
+                    "message": f"Difficulty must be one of {sorted(TOPIC_DIFFICULTIES)}.",
+                }
+            ),
+            400,
+        )
+
+    try:
+        generated = call_openai_topic_flashcards(topic, difficulty)
+    except Exception as exc:  # pragma: no cover - depends on network/API
+        app.logger.exception("Topic flashcard generation failed")
+        return (
+            jsonify(
+                {
+                    "error": "GenerationFailed",
+                    "message": "Flashcard generation is unavailable right now.",
+                }
+            ),
+            502,
+        )
+
+    return jsonify(generated)
 
 
 @app.route("/api/progress", methods=["GET"])
