@@ -24,49 +24,6 @@ var topicGenerationState = {
   difficulty: '',
 };
 
-var learningPathState = {
-  data: null,
-};
-
-var learningPathTokens = {
-  medium: { className: 'level-mode-medium', label: 'Medium', accent: 'Medium' },
-  expert: { className: 'level-mode-expert', label: 'Expert', accent: 'Expert' },
-  professor: { className: 'level-mode-professor', label: 'Professor', accent: 'Professor' },
-};
-
-var defaultLearningPathData = {
-  topic: 'Memorypro Learning Path',
-  concepts: [
-    {
-      id: 'arrays-foundations',
-      title: 'Arrays & Collections',
-      levels: [
-        { mode: 'medium', state: 'completed' },
-        { mode: 'expert', state: 'active' },
-        { mode: 'professor', state: 'locked' },
-      ],
-    },
-    {
-      id: 'async-mastery',
-      title: 'Async Patterns',
-      levels: [
-        { mode: 'medium', state: 'completed' },
-        { mode: 'expert', state: 'completed' },
-        { mode: 'professor', state: 'active' },
-      ],
-    },
-    {
-      id: 'architecture',
-      title: 'Systems Architecture',
-      levels: [
-        { mode: 'medium', state: 'completed' },
-        { mode: 'expert', state: 'completed' },
-        { mode: 'professor', state: 'completed' },
-      ],
-    },
-  ],
-};
-
 var API_BASE_URL = (function() {
   if (typeof window !== 'undefined') {
     var override = window.__MEMORYPRO_API_BASE__;
@@ -139,7 +96,6 @@ var domRefs = {
   topicGenerateButton: null,
   topicFlashcardPreview: null,
   topicStatus: null,
-  learningPathRoot: null,
 };
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -181,7 +137,6 @@ async function apiFetch(path, options) {
 async function initializeApp() {
   cacheDom();
   initializeSets();
-  initializeLearningPath();
   await ensureDeckLoaded();
   initializeManualEditor();
   bindHandlers();
@@ -241,7 +196,6 @@ function cacheDom() {
   domRefs.topicGenerateButton = document.getElementById('generate-topic-button');
   domRefs.topicFlashcardPreview = document.getElementById('topic-flashcard-preview');
   domRefs.topicStatus = document.getElementById('topic-status');
-  domRefs.learningPathRoot = document.getElementById('learning-path-root');
 }
 
 function initializeSets() {
@@ -1802,235 +1756,6 @@ function limitText(value, maxLength) {
   }
 
   return text.slice(0, Math.max(0, maxLength - 1)).trim() + '…';
-}
-
-function initializeLearningPath() {
-  var provided = (typeof window !== 'undefined' && window.__LEARNING_PATH_DATA__) || null;
-  var source = provided || defaultLearningPathData;
-  setLearningPathData(source);
-}
-
-function setLearningPathData(data) {
-  var normalized = normalizeLearningPathData(data);
-  learningPathState.data = normalized;
-  renderLearningPath(normalized);
-}
-
-function normalizeLearningPathData(raw) {
-  var safeTopic = raw && typeof raw.topic === 'string' ? raw.topic : 'Learning Path';
-  var rawConcepts = raw && Array.isArray(raw.concepts) ? raw.concepts : [];
-
-  var concepts = rawConcepts
-    .filter(function(concept) {
-      return concept && typeof concept === 'object' && typeof concept.id === 'string' && typeof concept.title === 'string';
-    })
-    .map(function(concept) {
-      var levels = Array.isArray(concept.levels)
-        ? concept.levels.filter(function(level) {
-            return level && typeof level.mode === 'string' && typeof level.state === 'string';
-          })
-        : [];
-
-      return {
-        id: concept.id,
-        title: concept.title,
-        levels: levels,
-      };
-    });
-
-  return { topic: safeTopic, concepts: concepts };
-}
-
-function renderLearningPath(data) {
-  if (!domRefs.learningPathRoot) {
-    return;
-  }
-
-  domRefs.learningPathRoot.innerHTML = '';
-
-  var path = createLearningPath(data);
-  domRefs.learningPathRoot.appendChild(path);
-
-  var titleEl = document.getElementById('learning-path-title');
-  if (titleEl && data && typeof data.topic === 'string') {
-    titleEl.textContent = data.topic;
-  }
-}
-
-function createLearningPath(data) {
-  var fragment = document.createDocumentFragment();
-  var concepts = data && Array.isArray(data.concepts) ? data.concepts : [];
-
-  if (!concepts.length) {
-    var emptyState = document.createElement('p');
-    emptyState.className = 'helper-text';
-    emptyState.textContent = 'No learning path data is available yet.';
-    fragment.appendChild(emptyState);
-    return fragment;
-  }
-
-  concepts.forEach(function(concept) {
-    var node = createConceptNode(concept);
-    fragment.appendChild(node);
-  });
-
-  return fragment;
-}
-
-function createConceptNode(concept) {
-  var container = document.createElement('article');
-  container.className = 'concept-node';
-  container.setAttribute('role', 'listitem');
-
-  var levels = Array.isArray(concept.levels) ? concept.levels : [];
-  var mastered = levels.length > 0 && levels.every(function(level) {
-    return level && typeof level.state === 'string' && level.state.toLowerCase() === 'completed';
-  });
-
-  if (mastered) {
-    container.classList.add('concept-mastered');
-  }
-
-  var header = document.createElement('div');
-  header.className = 'concept-meta';
-
-  var title = document.createElement('h3');
-  title.className = 'concept-title';
-  title.textContent = concept.title || 'Concept';
-  header.appendChild(title);
-
-  if (mastered) {
-    var badge = document.createElement('span');
-    badge.className = 'mastery-badge';
-    badge.setAttribute('aria-label', 'Mastered concept');
-    badge.textContent = '🏅 Mastered';
-    header.appendChild(badge);
-  }
-
-  container.appendChild(header);
-
-  if (concept.topic) {
-    var subtext = document.createElement('p');
-    subtext.className = 'subtext';
-    subtext.textContent = concept.topic;
-    container.appendChild(subtext);
-  }
-
-  var stack = document.createElement('div');
-  stack.className = 'difficulty-stack';
-
-  levels.forEach(function(level) {
-    var levelEl = createDifficultyLevel(level, concept);
-    stack.appendChild(levelEl);
-  });
-
-  container.appendChild(stack);
-  return container;
-}
-
-function createDifficultyLevel(level, concept) {
-  var state = (level && typeof level.state === 'string' ? level.state : '').toLowerCase();
-  var mode = level && typeof level.mode === 'string' ? level.mode.toLowerCase() : '';
-  var tokens = getModeTokens(mode);
-  var isActive = state === 'active';
-  var isLocked = state === 'locked';
-  var isCompleted = state === 'completed';
-  var isInteractive = isActive && !isLocked;
-  var stateKey = state || 'unknown';
-
-  var element = document.createElement(isInteractive ? 'button' : 'div');
-  element.className = ['difficulty-level', tokens.className || '', 'state-' + stateKey].join(' ').trim();
-  element.setAttribute('data-mode', mode || tokens.label.toLowerCase());
-  element.setAttribute('data-state', stateKey);
-  element.setAttribute('aria-label', tokens.label + ' · ' + stateKey);
-
-  if (isInteractive) {
-    element.type = 'button';
-    element.addEventListener('click', function() {
-      handleActiveLevelSelect(concept, level);
-    });
-  } else {
-    element.setAttribute('aria-disabled', 'true');
-    element.setAttribute('tabindex', '-1');
-  }
-
-  var iconInfo = getStateIcon(state);
-  var icon = document.createElement('span');
-  icon.className = 'status-icon';
-  icon.textContent = iconInfo.symbol;
-  icon.setAttribute('aria-hidden', 'true');
-
-  var label = document.createElement('div');
-  label.className = 'level-label';
-
-  var title = document.createElement('span');
-  title.className = 'level-title';
-  title.textContent = tokens.label.toUpperCase();
-
-  var status = document.createElement('span');
-  status.className = 'level-state';
-  status.textContent = iconInfo.label;
-
-  label.appendChild(title);
-  label.appendChild(status);
-
-  element.appendChild(icon);
-  element.appendChild(label);
-
-  var affordance = document.createElement('span');
-  affordance.className = 'status-icon';
-  affordance.textContent = isLocked ? '🔒' : isCompleted ? '✓' : '▶';
-  affordance.setAttribute('aria-hidden', 'true');
-  element.appendChild(affordance);
-
-  return element;
-}
-
-function getModeTokens(mode) {
-  var key = typeof mode === 'string' ? mode.toLowerCase() : '';
-  var tokens = learningPathTokens[key];
-
-  if (tokens) {
-    return tokens;
-  }
-
-  return {
-    className: '',
-    label: mode ? mode : 'Level',
-    accent: 'neutral',
-  };
-}
-
-function getStateIcon(state) {
-  var normalized = typeof state === 'string' ? state.toLowerCase() : '';
-
-  if (normalized === 'locked') {
-    return { symbol: '🔒', label: 'Locked' };
-  }
-
-  if (normalized === 'active') {
-    return { symbol: '✨', label: 'Active · start a session' };
-  }
-
-  if (normalized === 'completed') {
-    return { symbol: '✅', label: 'Completed' };
-  }
-
-  return { symbol: '•', label: 'Unknown' };
-}
-
-function emitLearningPathEvent(eventName, detail) {
-  if (!domRefs.learningPathRoot || typeof CustomEvent === 'undefined') {
-    return;
-  }
-
-  var event = new CustomEvent(eventName, { detail: detail || {} });
-  domRefs.learningPathRoot.dispatchEvent(event);
-}
-
-function handleActiveLevelSelect(concept, level) {
-  emitLearningPathEvent('learningpath:start', { concept: concept, level: level });
-  startSession();
 }
 
 function handleAddFlashcard() {
