@@ -4,6 +4,9 @@ var studyMode = 'flashcard';
 var currentCardRecord = null;
 var pendingAdvanceHandle = null;
 
+var TOPIC_DIFFICULTIES = ['beginner', 'intermediate', 'expert'];
+var DEFAULT_TOPIC_DIFFICULTY = 'beginner';
+
 var aiSearchState = {
   results: [],
   selectedBook: null,
@@ -21,7 +24,7 @@ var docUploadState = {
 var topicGenerationState = {
   flashcards: [],
   topic: '',
-  difficulty: '',
+  difficulty: DEFAULT_TOPIC_DIFFICULTY,
 };
 
 var API_BASE_URL = (function() {
@@ -94,6 +97,7 @@ var domRefs = {
   docFlashcardPreview: null,
   topicInput: null,
   topicGenerateButton: null,
+  topicDifficultyButtons: null,
   topicFlashcardPreview: null,
   topicStatus: null,
 };
@@ -136,6 +140,7 @@ async function apiFetch(path, options) {
 
 async function initializeApp() {
   cacheDom();
+  initializeTopicDifficultyUI();
   initializeSets();
   await ensureDeckLoaded();
   initializeManualEditor();
@@ -194,6 +199,7 @@ function cacheDom() {
   domRefs.docFlashcardPreview = document.getElementById('doc-flashcard-preview');
   domRefs.topicInput = document.getElementById('topic-input');
   domRefs.topicGenerateButton = document.getElementById('generate-topic-button');
+  domRefs.topicDifficultyButtons = document.querySelectorAll('.difficulty-button');
   domRefs.topicFlashcardPreview = document.getElementById('topic-flashcard-preview');
   domRefs.topicStatus = document.getElementById('topic-status');
 }
@@ -822,6 +828,7 @@ function bindHandlers() {
 
   attachActivate(domRefs.docUploadButton, safelyHandleDocumentUpload);
   attachActivate(domRefs.topicGenerateButton, safelyGenerateTopicFlashcards);
+  attachActivate(domRefs.topicDifficultyButtons, handleTopicDifficultySelection);
 
   if (domRefs.topicInput) {
     domRefs.topicInput.addEventListener('keydown', function(event) {
@@ -857,6 +864,43 @@ function handleTextbookQueryInput() {
     renderChapterList([]);
     renderGeneratedFlashcards(null);
   });
+}
+
+function initializeTopicDifficultyUI() {
+  setTopicDifficulty(topicGenerationState.difficulty || DEFAULT_TOPIC_DIFFICULTY);
+}
+
+function normalizeDifficulty(value) {
+  var normalized = normalizeString(value || '').toLowerCase();
+
+  if (TOPIC_DIFFICULTIES.indexOf(normalized) === -1) {
+    return DEFAULT_TOPIC_DIFFICULTY;
+  }
+
+  return normalized;
+}
+
+function setTopicDifficulty(value) {
+  var normalized = normalizeDifficulty(value);
+  topicGenerationState.difficulty = normalized;
+
+  Array.from(domRefs.topicDifficultyButtons || []).forEach(function(button) {
+    var option = button.getAttribute('data-difficulty');
+    var isActive = option === normalized;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+}
+
+function handleTopicDifficultySelection(event) {
+  var trigger = event && event.currentTarget ? event.currentTarget : null;
+  var difficulty = trigger && trigger.getAttribute ? trigger.getAttribute('data-difficulty') : null;
+
+  if (!difficulty) {
+    return;
+  }
+
+  setTopicDifficulty(difficulty);
 }
 
 function safelyPerformTextbookSearch() {
@@ -987,24 +1031,27 @@ async function generateTopicFlashcards() {
   }
 
   var topic = normalizeString(domRefs.topicInput.value || '').trim();
+  var difficulty = normalizeDifficulty(topicGenerationState.difficulty);
+  topicGenerationState.difficulty = difficulty;
+  setTopicDifficulty(difficulty);
 
   if (!topic) {
     setTopicStatus('Enter a topic to generate flashcards.', 'error');
     return;
   }
 
-  setTopicStatus('Generating flashcards for "' + topic + '"…', null);
+  setTopicStatus('Generating ' + difficulty + ' flashcards for "' + topic + '"…', null);
   renderTopicFlashcards(null);
 
   var response = await apiFetch('/api/generate-flashcards', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ topic: topic }),
+    body: JSON.stringify({ topic: topic, difficulty: difficulty }),
   });
 
   var payload = await response.json();
   var cards = Array.isArray(payload.flashcards) ? payload.flashcards : [];
-  var difficulty = typeof payload.difficulty === 'string' ? payload.difficulty : 'beginner';
+  var responseDifficulty = normalizeDifficulty(payload.difficulty || difficulty);
   var normalized = cards
     .map(function(card, index) {
       var front = normalizeString(card.front || card.question || '');
@@ -1026,7 +1073,8 @@ async function generateTopicFlashcards() {
 
   topicGenerationState.flashcards = normalized;
   topicGenerationState.topic = payload.topic || topic;
-  topicGenerationState.difficulty = difficulty;
+  topicGenerationState.difficulty = responseDifficulty;
+  setTopicDifficulty(topicGenerationState.difficulty);
 
   renderTopicFlashcards({
     flashcards: normalized,
@@ -1035,7 +1083,10 @@ async function generateTopicFlashcards() {
   });
 
   if (normalized.length) {
-    setTopicStatus('Generated ' + normalized.length + ' flashcards for "' + topicGenerationState.topic + '".', 'success');
+    setTopicStatus(
+      'Generated ' + normalized.length + ' ' + topicGenerationState.difficulty + ' flashcards for "' + topicGenerationState.topic + '".',
+      'success'
+    );
   } else {
     setTopicStatus('No flashcards were generated. Try a different topic.', 'error');
   }
