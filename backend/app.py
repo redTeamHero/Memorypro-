@@ -487,6 +487,48 @@ def parse_flashcard_response(raw_response: str, source: str) -> List[Dict[str, A
     return parsed
 
 
+def _extract_json_object(text: str) -> Optional[Any]:
+    """Return the first valid JSON object embedded in free-form text."""
+
+    start_idx: Optional[int] = None
+    depth = 0
+    in_string = False
+    escape_next = False
+
+    for idx, char in enumerate(text):
+        if in_string:
+            if escape_next:
+                escape_next = False
+                continue
+            if char == "\\":
+                escape_next = True
+                continue
+            if char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+            continue
+
+        if char == '{':
+            if depth == 0:
+                start_idx = idx
+            depth += 1
+            continue
+
+        if char == '}' and depth:
+            depth -= 1
+            if depth == 0 and start_idx is not None:
+                candidate = text[start_idx : idx + 1]
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    start_idx = None
+
+    return None
+
+
 def call_openai_flashcards(chunks: Sequence[str], source: str) -> List[Dict[str, Any]]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -518,13 +560,22 @@ def parse_topic_flashcard_response(raw_response: str, topic: str, difficulty: st
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3].strip()
 
+    parsed_json: Optional[Any]
     try:
-        data = json.loads(cleaned)
+        parsed_json = json.loads(cleaned)
     except json.JSONDecodeError:
+        parsed_json = _extract_json_object(cleaned)
+
+    if parsed_json is None:
         return {"topic": topic, "difficulty": difficulty, "flashcards": []}
 
+    data = parsed_json
+
     if not isinstance(data, dict):
-        return {"topic": topic, "difficulty": difficulty, "flashcards": []}
+        if isinstance(data, list):
+            data = {"topic": topic, "difficulty": difficulty, "flashcards": data}
+        else:
+            return {"topic": topic, "difficulty": difficulty, "flashcards": []}
 
     parsed_topic = normalize_text(data.get("topic")) or topic
     parsed_difficulty = (normalize_text(data.get("difficulty")) or difficulty).lower()
