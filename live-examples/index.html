@@ -124,6 +124,35 @@
               />
               <button id="generate-topic-button" type="button" class="primary-button">Generate flashcards</button>
             </div>
+            <div class="difficulty-row" role="group" aria-label="Choose flashcard difficulty">
+              <span class="difficulty-label">Difficulty</span>
+              <div class="difficulty-buttons">
+                <button
+                  type="button"
+                  class="secondary-button difficulty-button active"
+                  data-difficulty="beginner"
+                  aria-pressed="true"
+                >
+                  Beginner
+                </button>
+                <button
+                  type="button"
+                  class="secondary-button difficulty-button"
+                  data-difficulty="intermediate"
+                  aria-pressed="false"
+                >
+                  Intermediate
+                </button>
+                <button
+                  type="button"
+                  class="secondary-button difficulty-button"
+                  data-difficulty="expert"
+                  aria-pressed="false"
+                >
+                  Expert
+                </button>
+              </div>
+            </div>
             <p id="topic-status" class="helper-text ai-status" aria-live="polite"></p>
             <div id="topic-flashcard-preview" class="ai-flashcards" aria-live="polite"></div>
           </div>

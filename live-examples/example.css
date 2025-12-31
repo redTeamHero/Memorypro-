@@ -149,6 +149,24 @@ body {
   align-items: center;
 }
 
+.difficulty-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.difficulty-label {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.difficulty-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 #topic-input {
   flex: 1 1 260px;
   min-width: 200px;
@@ -467,18 +485,21 @@ body {
   gap: 16px;
 }
 
-.mode-buttons {
+.mode-buttons,
+.difficulty-buttons {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
 }
 
-.mode-button {
+.mode-button,
+.difficulty-button {
   flex: 1 1 160px;
   min-width: 140px;
 }
 
-.mode-button.active {
+.mode-button.active,
+.difficulty-button.active {
   background: linear-gradient(135deg, var(--blue-dark), var(--blue));
   color: #fff;
   border-color: rgba(28, 176, 246, 0.1);
@@ -486,7 +507,9 @@ body {
 }
 
 .mode-button.active:hover,
-.mode-button.active:focus-visible {
+.mode-button.active:focus-visible,
+.difficulty-button.active:hover,
+.difficulty-button.active:focus-visible {
   box-shadow: 0 22px 32px rgba(28, 176, 246, 0.32);
 }
 
