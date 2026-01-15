@@ -486,20 +486,23 @@ body {
 }
 
 .mode-buttons,
-.difficulty-buttons {
+.difficulty-buttons,
+.count-buttons {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
 }
 
 .mode-button,
-.difficulty-button {
+.difficulty-button,
+.count-button {
   flex: 1 1 160px;
   min-width: 140px;
 }
 
 .mode-button.active,
-.difficulty-button.active {
+.difficulty-button.active,
+.count-button.active {
   background: linear-gradient(135deg, var(--blue-dark), var(--blue));
   color: #fff;
   border-color: rgba(28, 176, 246, 0.1);
@@ -509,7 +512,9 @@ body {
 .mode-button.active:hover,
 .mode-button.active:focus-visible,
 .difficulty-button.active:hover,
-.difficulty-button.active:focus-visible {
+.difficulty-button.active:focus-visible,
+.count-button.active:hover,
+.count-button.active:focus-visible {
   box-shadow: 0 22px 32px rgba(28, 176, 246, 0.32);
 }
 
