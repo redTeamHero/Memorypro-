@@ -901,6 +901,11 @@ function handleTopicDifficultySelection(event) {
   }
 
   setTopicDifficulty(difficulty);
+
+  var topicValue = domRefs.topicInput ? normalizeString(domRefs.topicInput.value || '').trim() : '';
+  if (topicValue) {
+    safelyGenerateTopicFlashcards();
+  }
 }
 
 function safelyPerformTextbookSearch() {
