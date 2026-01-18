@@ -445,7 +445,7 @@ def build_topic_flashcard_prompt(topic: str, difficulty: str, target_count: Opti
         "- Intermediate: usage + rules + comparisons.\n"
         "- Expert: edge cases + pitfalls + advanced behavior.\n"
         + count_instruction
-        "Output format (must match exactly):\n"
+        + "Output format (must match exactly):\n"
         "{\n"
         '  "topic": "<topic>",\n'
         '  "difficulty": "<difficulty>",\n'
