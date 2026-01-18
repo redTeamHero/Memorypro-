@@ -6,6 +6,8 @@ var pendingAdvanceHandle = null;
 
 var TOPIC_DIFFICULTIES = ['beginner', 'intermediate', 'expert'];
 var DEFAULT_TOPIC_DIFFICULTY = 'beginner';
+var TOPIC_CARD_COUNTS = [10, 25, 50];
+var DEFAULT_TOPIC_CARD_COUNT = 10;
 
 var aiSearchState = {
   results: [],
@@ -25,6 +27,7 @@ var topicGenerationState = {
   flashcards: [],
   topic: '',
   difficulty: DEFAULT_TOPIC_DIFFICULTY,
+  count: DEFAULT_TOPIC_CARD_COUNT,
 };
 
 var API_BASE_URL = (function() {
@@ -98,6 +101,7 @@ var domRefs = {
   topicInput: null,
   topicGenerateButton: null,
   topicDifficultyButtons: null,
+  topicCountButtons: null,
   topicFlashcardPreview: null,
   topicStatus: null,
 };
@@ -200,6 +204,7 @@ function cacheDom() {
   domRefs.topicInput = document.getElementById('topic-input');
   domRefs.topicGenerateButton = document.getElementById('generate-topic-button');
   domRefs.topicDifficultyButtons = document.querySelectorAll('.difficulty-button');
+  domRefs.topicCountButtons = document.querySelectorAll('.count-button');
   domRefs.topicFlashcardPreview = document.getElementById('topic-flashcard-preview');
   domRefs.topicStatus = document.getElementById('topic-status');
 }
@@ -829,6 +834,7 @@ function bindHandlers() {
   attachActivate(domRefs.docUploadButton, safelyHandleDocumentUpload);
   attachActivate(domRefs.topicGenerateButton, safelyGenerateTopicFlashcards);
   attachActivate(domRefs.topicDifficultyButtons, handleTopicDifficultySelection);
+  attachActivate(domRefs.topicCountButtons, handleTopicCountSelection);
 
   if (domRefs.topicInput) {
     domRefs.topicInput.addEventListener('keydown', function(event) {
@@ -868,6 +874,7 @@ function handleTextbookQueryInput() {
 
 function initializeTopicDifficultyUI() {
   setTopicDifficulty(topicGenerationState.difficulty || DEFAULT_TOPIC_DIFFICULTY);
+  setTopicCount(topicGenerationState.count || DEFAULT_TOPIC_CARD_COUNT);
 }
 
 function normalizeDifficulty(value) {
@@ -880,12 +887,34 @@ function normalizeDifficulty(value) {
   return normalized;
 }
 
+function normalizeTopicCount(value) {
+  var parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_TOPIC_CARD_COUNT;
+  }
+
+  return TOPIC_CARD_COUNTS.indexOf(parsed) === -1 ? DEFAULT_TOPIC_CARD_COUNT : parsed;
+}
+
 function setTopicDifficulty(value) {
   var normalized = normalizeDifficulty(value);
   topicGenerationState.difficulty = normalized;
 
   Array.from(domRefs.topicDifficultyButtons || []).forEach(function(button) {
     var option = button.getAttribute('data-difficulty');
+    var isActive = option === normalized;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+}
+
+function setTopicCount(value) {
+  var normalized = normalizeTopicCount(value);
+  topicGenerationState.count = normalized;
+
+  Array.from(domRefs.topicCountButtons || []).forEach(function(button) {
+    var option = Number(button.getAttribute('data-count'));
     var isActive = option === normalized;
     button.classList.toggle('active', isActive);
     button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
@@ -901,6 +930,22 @@ function handleTopicDifficultySelection(event) {
   }
 
   setTopicDifficulty(difficulty);
+
+  var topicValue = domRefs.topicInput ? normalizeString(domRefs.topicInput.value || '').trim() : '';
+  if (topicValue) {
+    safelyGenerateTopicFlashcards();
+  }
+}
+
+function handleTopicCountSelection(event) {
+  var trigger = event && event.currentTarget ? event.currentTarget : null;
+  var countValue = trigger && trigger.getAttribute ? trigger.getAttribute('data-count') : null;
+
+  if (!countValue) {
+    return;
+  }
+
+  setTopicCount(countValue);
 
   var topicValue = domRefs.topicInput ? normalizeString(domRefs.topicInput.value || '').trim() : '';
   if (topicValue) {
@@ -1037,21 +1082,27 @@ async function generateTopicFlashcards() {
 
   var topic = normalizeString(domRefs.topicInput.value || '').trim();
   var difficulty = normalizeDifficulty(topicGenerationState.difficulty);
+  var count = normalizeTopicCount(topicGenerationState.count);
   topicGenerationState.difficulty = difficulty;
+  topicGenerationState.count = count;
   setTopicDifficulty(difficulty);
+  setTopicCount(count);
 
   if (!topic) {
     setTopicStatus('Enter a topic to generate flashcards.', 'error');
     return;
   }
 
-  setTopicStatus('Generating ' + difficulty + ' flashcards for "' + topic + '"…', null);
+  setTopicStatus(
+    'Generating ' + count + ' ' + difficulty + ' flashcards for "' + topic + '"…',
+    null
+  );
   renderTopicFlashcards(null);
 
   var response = await apiFetch('/api/generate-flashcards', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ topic: topic, difficulty: difficulty }),
+    body: JSON.stringify({ topic: topic, difficulty: difficulty, count: count }),
   });
 
   var payload = await response.json();
@@ -1089,7 +1140,13 @@ async function generateTopicFlashcards() {
 
   if (normalized.length) {
     setTopicStatus(
-      'Generated ' + normalized.length + ' ' + topicGenerationState.difficulty + ' flashcards for "' + topicGenerationState.topic + '".',
+      'Generated ' +
+        normalized.length +
+        ' ' +
+        topicGenerationState.difficulty +
+        ' flashcards for "' +
+        topicGenerationState.topic +
+        '".',
       'success'
     );
   } else {

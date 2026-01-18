@@ -29,6 +29,7 @@ TOPIC_CARD_RANGES = {
     "intermediate": (15, 25),
     "expert": (20, 35),
 }
+TOPIC_CARD_COUNTS = {10, 25, 50}
 
 GOOGLE_BOOKS_SEARCH_URL = "https://www.googleapis.com/books/v1/volumes"
 GOOGLE_BOOKS_DEFAULT_LIMIT = 5
@@ -97,6 +98,15 @@ def normalize_text(value: Optional[str]) -> str:
     if not value:
         return ""
     return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def normalize_topic_count(value: Any) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def split_text(text: str, max_chars: int = MAX_CHARS_PER_CHUNK) -> List[str]:
@@ -406,10 +416,19 @@ Here’s the text:
 """
 
 
-def build_topic_flashcard_prompt(topic: str, difficulty: str) -> str:
+def build_topic_flashcard_prompt(topic: str, difficulty: str, target_count: Optional[int] = None) -> str:
     safe_topic = normalize_text(topic) or "general knowledge"
     safe_difficulty = difficulty if difficulty in TOPIC_DIFFICULTIES else DEFAULT_TOPIC_DIFFICULTY
     min_cards, max_cards = TOPIC_CARD_RANGES.get(safe_difficulty, TOPIC_CARD_RANGES[DEFAULT_TOPIC_DIFFICULTY])
+    if target_count:
+        min_cards = target_count
+        max_cards = target_count
+
+    count_instruction = (
+        f"- Flashcard count: exactly {target_count} cards.\n\n"
+        if target_count
+        else f"- Flashcard count: between {min_cards} and {max_cards} cards.\n\n"
+    )
 
     return (
         "You are an expert educator, curriculum designer, and flashcard engine.\n\n"
@@ -425,7 +444,7 @@ def build_topic_flashcard_prompt(topic: str, difficulty: str) -> str:
         "- Beginner: definitions + fundamentals.\n"
         "- Intermediate: usage + rules + comparisons.\n"
         "- Expert: edge cases + pitfalls + advanced behavior.\n"
-        f"- Flashcard count: between {min_cards} and {max_cards} cards.\n\n"
+        + count_instruction
         "Output format (must match exactly):\n"
         "{\n"
         '  "topic": "<topic>",\n'
@@ -553,7 +572,12 @@ def call_openai_flashcards(chunks: Sequence[str], source: str) -> List[Dict[str,
     return flashcards
 
 
-def parse_topic_flashcard_response(raw_response: str, topic: str, difficulty: str) -> Dict[str, Any]:
+def parse_topic_flashcard_response(
+    raw_response: str,
+    topic: str,
+    difficulty: str,
+    target_count: Optional[int] = None,
+) -> Dict[str, Any]:
     cleaned = raw_response.strip()
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```[a-zA-Z]*", "", cleaned, count=1).strip()
@@ -590,6 +614,9 @@ def parse_topic_flashcard_response(raw_response: str, topic: str, difficulty: st
     min_cards, max_cards = TOPIC_CARD_RANGES.get(
         parsed_difficulty, TOPIC_CARD_RANGES[DEFAULT_TOPIC_DIFFICULTY]
     )
+    if target_count:
+        min_cards = target_count
+        max_cards = target_count
 
     for idx, card in enumerate(flashcards):
         if not isinstance(card, dict):
@@ -638,7 +665,9 @@ def parse_topic_flashcard_response(raw_response: str, topic: str, difficulty: st
     return {"topic": parsed_topic, "difficulty": parsed_difficulty, "flashcards": limited_cards}
 
 
-def call_openai_topic_flashcards(topic: str, difficulty: str) -> Dict[str, Any]:
+def call_openai_topic_flashcards(
+    topic: str, difficulty: str, target_count: Optional[int] = None
+) -> Dict[str, Any]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not configured.")
@@ -647,7 +676,7 @@ def call_openai_topic_flashcards(topic: str, difficulty: str) -> Dict[str, Any]:
     if normalized_difficulty not in TOPIC_DIFFICULTIES:
         normalized_difficulty = DEFAULT_TOPIC_DIFFICULTY
 
-    prompt = build_topic_flashcard_prompt(topic, normalized_difficulty)
+    prompt = build_topic_flashcard_prompt(topic, normalized_difficulty, target_count)
     client = OpenAI(api_key=api_key)
     response = client.chat.completions.create(
         model=DEFAULT_MODEL,
@@ -657,11 +686,16 @@ def call_openai_topic_flashcards(topic: str, difficulty: str) -> Dict[str, Any]:
     )
 
     content = response.choices[0].message.content if response.choices else "{}"
-    parsed = parse_topic_flashcard_response(content or "{}", topic, normalized_difficulty)
+    parsed = parse_topic_flashcard_response(
+        content or "{}", topic, normalized_difficulty, target_count
+    )
 
-    min_cards, _ = TOPIC_CARD_RANGES.get(
+    min_cards, max_cards = TOPIC_CARD_RANGES.get(
         normalized_difficulty, TOPIC_CARD_RANGES[DEFAULT_TOPIC_DIFFICULTY]
     )
+    if target_count:
+        min_cards = target_count
+        max_cards = target_count
     if len(parsed.get("flashcards", [])) < min_cards:
         missing = min_cards - len(parsed["flashcards"])
         for index in range(missing):
@@ -674,7 +708,7 @@ def call_openai_topic_flashcards(topic: str, difficulty: str) -> Dict[str, Any]:
                     "category": "concept",
                 }
             )
-        parsed["flashcards"] = parsed["flashcards"][: TOPIC_CARD_RANGES[normalized_difficulty][1]]
+        parsed["flashcards"] = parsed["flashcards"][:max_cards]
 
     return parsed
 
@@ -810,6 +844,7 @@ def create_topic_flashcards() -> Any:
     topic = normalize_text(payload.get("topic"))
     difficulty_raw = normalize_text(payload.get("difficulty")) or DEFAULT_TOPIC_DIFFICULTY
     difficulty = difficulty_raw.lower()
+    count = normalize_topic_count(payload.get("count") or payload.get("cardCount"))
 
     if not topic:
         return (
@@ -828,8 +863,19 @@ def create_topic_flashcards() -> Any:
             400,
         )
 
+    if count is not None and count not in TOPIC_CARD_COUNTS:
+        return (
+            jsonify(
+                {
+                    "error": "InvalidCount",
+                    "message": f"Count must be one of {sorted(TOPIC_CARD_COUNTS)}.",
+                }
+            ),
+            400,
+        )
+
     try:
-        generated = call_openai_topic_flashcards(topic, difficulty)
+        generated = call_openai_topic_flashcards(topic, difficulty, count)
     except Exception as exc:  # pragma: no cover - depends on network/API
         app.logger.exception("Topic flashcard generation failed")
         return (
