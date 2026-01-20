@@ -68,7 +68,7 @@ if __name__ == "__main__":
 
     webview.create_window(
         "MemoryPro",
-        f"http://{HOST}:{PORT}/index.html",
+        f"http://{HOST}:{PORT}/",
         width=1200,
         height=800,
         resizable=True,

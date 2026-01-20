@@ -30,35 +30,6 @@ var topicGenerationState = {
   count: DEFAULT_TOPIC_CARD_COUNT,
 };
 
-var API_BASE_URL = (function() {
-  if (typeof window !== 'undefined') {
-    var override = window.__MEMORYPRO_API_BASE__;
-    if (override && typeof override === 'string') {
-      return override.replace(/\/+$/, '');
-    }
-
-    try {
-      var parsed = new URL(window.location.href);
-      if (parsed.protocol === 'file:' || parsed.origin === 'null') {
-        return 'http://127.0.0.1:5000';
-      }
-
-      if (parsed.port === '8000') {
-        parsed.port = '5000';
-        return parsed.origin;
-      }
-
-      if (parsed.port === '5000' || !parsed.port) {
-        return parsed.origin.replace(/\/+$/, '');
-      }
-    } catch (error) {
-      console.warn('Could not determine API base URL from window location.', error);
-    }
-  }
-
-  return 'http://127.0.0.1:5000';
-})();
-
 var domRefs = {
   uploadLabel: null,
   questionsInput: null,
@@ -118,11 +89,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function buildApiUrl(path) {
   if (!path) {
-    return API_BASE_URL;
+    return '/';
   }
 
-  var normalizedPath = path.charAt(0) === '/' ? path : '/' + path;
-  return API_BASE_URL + normalizedPath;
+  return path.charAt(0) === '/' ? path : '/' + path;
 }
 
 async function apiFetch(path, options) {

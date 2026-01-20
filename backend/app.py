@@ -23,7 +23,6 @@ def resolve_base_dir() -> Path:
 
 
 BASE_DIR = resolve_base_dir()
-FRONTEND_DIR = (BASE_DIR.parent / "live-examples").resolve()
 DATA_DIR = BASE_DIR / "data"
 DEFAULT_DECK_FILE = DATA_DIR / "default_deck.json"
 PROGRESS_FILE = DATA_DIR / "progress.json"
@@ -84,7 +83,7 @@ KEYWORD_STOPWORDS = {
     "would",
 }
 
-app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path="")
+app = Flask(__name__, static_folder="static", static_url_path="")
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 
