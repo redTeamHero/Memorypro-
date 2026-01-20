@@ -732,6 +732,11 @@ def get_default_deck() -> Any:
     return jsonify(deck)
 
 
+@app.route("/api/health", methods=["GET"])
+def health_check() -> Any:
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/textbooks/search", methods=["GET"])
 def search_textbooks() -> Any:
     query = normalize_text(request.args.get("q") or request.args.get("query"))

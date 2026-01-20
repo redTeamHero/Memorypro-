@@ -39,6 +39,10 @@ var API_BASE_URL = (function() {
 
     try {
       var parsed = new URL(window.location.href);
+      if (parsed.protocol === 'file:' || parsed.origin === 'null') {
+        return 'http://127.0.0.1:5000';
+      }
+
       if (parsed.port === '8000') {
         parsed.port = '5000';
         return parsed.origin;
@@ -52,7 +56,7 @@ var API_BASE_URL = (function() {
     }
   }
 
-  return 'http://localhost:5000';
+  return 'http://127.0.0.1:5000';
 })();
 
 var domRefs = {
