@@ -64,6 +64,35 @@ These steps are sufficient for experimenting with the library and modifying the 
 
 These steps are sufficient for experimenting with the library and modifying the example flashcards locally.
 
+## Packaging the Desktop App (PyInstaller)
+
+Memorypro reads runtime data from `backend/data` (including `default_deck.json`). When bundling with PyInstaller, include that folder explicitly so the EXE can find it at runtime.
+
+### Windows CMD
+
+```bat
+pyinstaller ^
+  --onefile ^
+  --noconsole ^
+  --name Memorypro ^
+  --add-data "live-examples;live-examples" ^
+  --add-data "backend\data;backend\data" ^
+  --hidden-import flask ^
+  --hidden-import flask_cors ^
+  --hidden-import pypdf ^
+  --hidden-import docx ^
+  --hidden-import openai ^
+  run.py
+```
+
+### PowerShell (single line)
+
+```powershell
+pyinstaller --onefile --noconsole --name Memorypro --add-data "live-examples;live-examples" --add-data "backend\data;backend\data" --hidden-import flask --hidden-import flask_cors --hidden-import pypdf --hidden-import docx --hidden-import openai run.py
+```
+
+> **Note:** `run.py` already uses a PyInstaller-aware resource path helper so the bundled app resolves `backend/data/default_deck.json` correctly inside the EXE.
+
 ### Generate JSON-ready flashcards from any topic
 
 The backend can produce structured flashcards from a simple topic prompt—useful for the Memorypro UI or any external client that wants strictly formatted cards.
