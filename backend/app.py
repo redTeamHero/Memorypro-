@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import sys
 from collections import Counter
 from datetime import datetime
 from io import BytesIO
@@ -14,7 +15,14 @@ from flask_cors import CORS
 from openai import OpenAI
 from pypdf import PdfReader
 
-BASE_DIR = Path(__file__).resolve().parent
+def resolve_base_dir() -> Path:
+    base_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    if (base_dir / "backend").exists():
+        return base_dir / "backend"
+    return Path(__file__).resolve().parent
+
+
+BASE_DIR = resolve_base_dir()
 FRONTEND_DIR = (BASE_DIR.parent / "live-examples").resolve()
 DATA_DIR = BASE_DIR / "data"
 DEFAULT_DECK_FILE = DATA_DIR / "default_deck.json"
