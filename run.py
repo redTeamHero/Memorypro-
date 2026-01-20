@@ -1,9 +1,9 @@
-import json
 import os
 import socket
 import sys
 import threading
 import time
+import json
 
 import webview
 from backend.app import app, write_json
@@ -12,30 +12,45 @@ HOST = "127.0.0.1"
 PORT = 5000
 
 
+# -------------------------------
+# PyInstaller-safe path resolver
+# -------------------------------
 def resource_path(relative_path: str) -> str:
     if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
 
+# -------------------------------
+# Data paths (inside EXE)
+# -------------------------------
 BASE_DIR = resource_path("")
 DATA_DIR = os.path.join(BASE_DIR, "backend", "data")
 DEFAULT_DECK_FILE = os.path.join(DATA_DIR, "default_deck.json")
 PROGRESS_FILE = os.path.join(DATA_DIR, "progress.json")
 
 
+# -------------------------------
+# Auto-create data files
+# -------------------------------
 def ensure_data_files() -> None:
     os.makedirs(DATA_DIR, exist_ok=True)
 
     if not os.path.exists(DEFAULT_DECK_FILE):
-        default_deck = {"name": "Default Deck", "cards": []}
-        with open(DEFAULT_DECK_FILE, "w", encoding="utf-8") as default_file:
-            json.dump(default_deck, default_file, indent=2)
+        default_deck = {
+            "name": "Default Deck",
+            "cards": []
+        }
+        with open(DEFAULT_DECK_FILE, "w", encoding="utf-8") as f:
+            json.dump(default_deck, f, indent=2)
 
     if not os.path.exists(PROGRESS_FILE):
         write_json(PROGRESS_FILE, [])
 
 
+# -------------------------------
+# Flask server
+# -------------------------------
 def start_server() -> None:
     app.run(
         host=HOST,
@@ -56,6 +71,9 @@ def wait_for_server(timeout_seconds: float = 6.0) -> None:
     raise RuntimeError("Flask server failed to start.")
 
 
+# -------------------------------
+# MAIN
+# -------------------------------
 if __name__ == "__main__":
     os.chdir(BASE_DIR)
 
@@ -68,7 +86,7 @@ if __name__ == "__main__":
 
     webview.create_window(
         "MemoryPro",
-        f"http://{HOST}:{PORT}/",
+        f"http://{HOST}:{PORT}/index.html",
         width=1200,
         height=800,
         resizable=True,
