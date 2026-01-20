@@ -26,6 +26,7 @@ BASE_DIR = resolve_base_dir()
 DATA_DIR = BASE_DIR / "data"
 DEFAULT_DECK_FILE = DATA_DIR / "default_deck.json"
 PROGRESS_FILE = DATA_DIR / "progress.json"
+APP_VERSION = "1.0.0"
 DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 MAX_CHARS_PER_CHUNK = 5500
 MAX_FLASHCARDS_PER_CHUNK = 20
@@ -734,6 +735,11 @@ def get_default_deck() -> Any:
 @app.route("/api/health", methods=["GET"])
 def health_check() -> Any:
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/version", methods=["GET"])
+def version() -> Any:
+    return jsonify({"version": APP_VERSION})
 
 
 @app.route("/api/textbooks/search", methods=["GET"])
