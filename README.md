@@ -1,262 +1,161 @@
+# Memorypro
 
-# Memorypro - Mind Hacking.
-Memorypro allows you to easily build flashcards to study for... everything!
+## Overview
+Memorypro is a flashcard study app that blends a spaced-repetition engine with AI-assisted content generation. It is designed for learners, coaches, and study teams who want to build, organize, and review decks quickly from topics, textbooks, or uploaded documents. The project ships a Flask backend that powers AI endpoints and a static front-end experience that runs entirely in the browser. A lightweight desktop wrapper (via `run.py`) launches the same web UI in a native window for offline-style use. The UI focuses on deck organization, importing/exporting content, and reinforcing progress through a Leitner-style flow. AI helpers connect to OpenAI and Google Books to turn topics and textbook outlines into study-ready cards. Overall, Memorypro targets fast iteration on flashcards and supports both manual editing and AI-driven generation.
 
-Memorypro is a modernized flashcard trainer that keeps the original OuiCards spaced-repetition engine while presenting a polished, conversion-ready demo for credit-repair education. The UI showcases how to load CSV decks, walk through cards, and mark progress across Leitner buckets—perfect for onboarding prospects into premium dispute-automation flows.
+Key capabilities:
+- Create, edit, and organize multiple flashcard sets.
+- Import flashcards from CSV/JSON text input.
+- Generate cards from textbook search results and chapter summaries.
+- Generate cards from topics or uploaded documents using OpenAI.
+- Track study progress and persist data locally.
 
-> **Credit:** Memorypro is built on top of the open-source [OuiCards](http://carlsednaoui.github.io/ouicards/) project created by [Carl Sednaoui](https://github.com/carlsednaoui). This fork refreshes the branding and example experience while honoring the original work and MIT license.
+## Repository Status
+- **Fork status:** Fork
+- **Explanation:** The repository includes the OuiCards engine (`ouicards.js`) and front-end conventions, indicating it is derived from the original OuiCards project.
+- **Upstream:** [OuiCards](http://carlsednaoui.github.io/ouicards/)
+- **Fork changes (inferred):** Adds a Flask API for AI-assisted flashcard generation, a refreshed UI in `backend/static`, and a desktop wrapper via `run.py`.
 
-## About the Leitner System
-From the [Wikipedia page](http://en.wikipedia.org/wiki/Leitner_system):
+## Features
+- Multi-set flashcard management with local persistence.
+- CSV/JSON paste import for bulk deck creation.
+- Topic-based flashcard generation with configurable difficulty and card count.
+- Google Books search + chapter outline workflow for textbook-based cards.
+- Document upload (PDF/DOCX/TXT) to generate flashcards from source text.
+- Progress tracking endpoint that stores session snapshots.
+- Desktop app launcher using a Flask server plus `pywebview`.
 
-> The Leitner system is a widely used method to efficiently use flashcards that was proposed by the German science journalist Sebastian Leitner in the 1970s. It is a simple implementation of the principle of spaced repetition, where cards are reviewed at increasing interval.
+## Tech Stack
+- **Languages:** Python, JavaScript, HTML, CSS.
+- **Backend:** Flask, Flask-CORS, OpenAI SDK, Requests, PyPDF, python-docx, python-dotenv.
+- **Frontend:** Vanilla JS + OuiCards logic, static HTML/CSS.
+- **Desktop wrapper:** `pywebview` + Tkinter (used in `run.py`).
+- **Tooling:** `pip`, optional PyInstaller for packaging.
 
-In this method flashcards are sorted into groups according to how well you know each one in the Leitner's learning box. You try to recall the solution written on a flashcard—if you succeed, you send the card to the next group. If you fail, you send it back to the first group. Each succeeding group has a longer period of time before you are required to revisit the cards.
+## Project Structure
+```
+.
+├── backend/
+│   ├── app.py                 # Flask API + AI endpoints + static file serving
+│   ├── requirements.txt       # Backend Python dependencies
+│   ├── updater.py             # Version check + updater utility
+│   ├── data/                  # Default deck + progress store
+│   └── static/                # Web UI (index.html, JS, CSS, fonts)
+├── docs/
+│   └── textbook-assistant/     # Guide for Google Books workflow
+├── live-examples/
+│   └── ouicards-jquery-example.html
+└── run.py                      # Desktop launcher with pywebview
+```
 
-## Example
+## Getting Started
 
-Visit the refreshed Memorypro demo at `live-examples/index.html` once you start a local server (instructions below). If you want to compare with the original inspiration, check out the [OuiCards example](http://carlsednaoui.github.io/ouicards/live-examples/index.html) that seeded this project.
+### Prerequisites
+- **OS:** Any OS that can run Python and a web browser.
+- **Python:** 3.9+ recommended.
+- **Package manager:** `pip`.
+- **External services:** OpenAI API access for AI features.
 
-## Getting Started Locally
-
-1. Clone the repository and move into the project directory:
-
+### Installation
+1. Install backend dependencies:
    ```bash
-   git clone https://github.com/<your-username>/Memorypro-.git
-   cd Memorypro-
+   python3 -m pip install -r backend/requirements.txt
+   ```
+2. (Optional) Install the desktop wrapper dependency if you plan to run `run.py`:
+   ```bash
+   python3 -m pip install pywebview
    ```
 
-2. Launch a lightweight static web server (any option works; below uses Python 3, which ships with most systems):
+### Configuration
+Memorypro reads environment variables via `python-dotenv` (from a `.env` file) or your shell.
 
-   ```bash
-   python3 -m http.server 8000
-   ```
-
-   This serves the project from `http://localhost:8000/`.
-
-3. In your browser, open `http://localhost:8000/live-examples/index.html` to interact with the Memorypro flashcards UI.
-
-## Getting Started Locally
-
-1. Clone the repository and move into the project directory:
-
-   ```bash
-   git clone https://github.com/<your-username>/Memorypro-.git
-   cd Memorypro-
-   ```
-
-2. Launch a lightweight static web server (any option works; below uses Python 3, which ships with most systems):
-
-   ```bash
-   python3 -m http.server 8000
-   ```
-
-   This serves the project from `http://localhost:8000/`.
-
-3. In your browser, open `http://localhost:8000/live-examples/index.html` to interact with the demo flashcards UI.
-
-   - Use `ouicards.js` directly in your own HTML pages or explore the example jQuery integration at `live-examples/ouicards-jquery-example.html`.
-   - Stop the local server anytime with `Ctrl+C`.
-
-These steps are sufficient for experimenting with the library and modifying the example flashcards locally.
-
-4. Visit `http://localhost:5000/` in your browser to interact with the live flashcard experience.
-
-These steps are sufficient for experimenting with the library and modifying the example flashcards locally.
-
-## Packaging the Desktop App (PyInstaller)
-
-Memorypro reads runtime data from `backend/data` (including `default_deck.json`). When bundling with PyInstaller, include that folder explicitly so the EXE can find it at runtime.
-
-### Windows CMD
-
-```bat
-pyinstaller ^
-  --onefile ^
-  --noconsole ^
-  --name Memorypro ^
-  --add-data "live-examples;live-examples" ^
-  --add-data "backend\data;backend\data" ^
-  --hidden-import flask ^
-  --hidden-import flask_cors ^
-  --hidden-import pypdf ^
-  --hidden-import docx ^
-  --hidden-import openai ^
-  run.py
+Create a `.env` file in the repo root if you want local environment management:
+```
+OPENAI_API_KEY=your_api_key_here
+OPENAI_MODEL=gpt-4o-mini
 ```
 
-### PowerShell (single line)
+- `OPENAI_API_KEY` is **required**; the backend raises an error on startup if it is missing.
+- `OPENAI_MODEL` is optional and defaults to `gpt-4o-mini`.
 
-```powershell
-pyinstaller --onefile --noconsole --name Memorypro --add-data "live-examples;live-examples" --add-data "backend\data;backend\data" --hidden-import flask --hidden-import flask_cors --hidden-import pypdf --hidden-import docx --hidden-import openai run.py
+## Usage
+
+### Run Locally
+**Backend + Web UI (recommended):**
+```bash
+export OPENAI_API_KEY=your_api_key_here
+python3 backend/app.py
 ```
+Open `http://127.0.0.1:5000/index.html` in your browser. The UI will load from `backend/static` and call the API at the same origin.
 
-> **Note:** `run.py` already uses a PyInstaller-aware resource path helper so the bundled app resolves `backend/data/default_deck.json` correctly inside the EXE.
-
-### Generate JSON-ready flashcards from any topic
-
-The backend can produce structured flashcards from a simple topic prompt—useful for the Memorypro UI or any external client that wants strictly formatted cards.
-
+**Desktop app wrapper (optional):**
+```bash
+export OPENAI_API_KEY=your_api_key_here
+python3 run.py
 ```
-POST /api/topics/flashcards
-Body: { "topic": "Neural networks", "difficulty": "beginner" }
+This starts the Flask server and opens a native window pointing at the local UI.
+
+**Static jQuery example (optional):**
+```bash
+python3 -m http.server 8000
 ```
+Then open `http://localhost:8000/live-examples/ouicards-jquery-example.html`.
 
-Response:
+### Build / Packaging
+No build scripts or packaging configs are included. If you want a desktop installer, you can package `run.py` using PyInstaller or a similar tool based on your environment.
 
-```
-{
-  "topic": "Neural networks",
-  "difficulty": "beginner",
-  "flashcards": [
-    {
-      "id": "auto-1",
-      "front": "What is a neural network?",
-      "back": "A model inspired by interconnected neurons that maps inputs to outputs via weighted layers.",
-      "example": "",
-      "category": "definition"
-    },
-    ...
-  ]
-}
-```
+### Tests
+No automated tests or linting scripts are included in the repository.
 
-Difficulty can be `beginner`, `intermediate`, or `expert`, and an `OPENAI_API_KEY` environment variable is required for generation.
+## Development Guide
 
-## Using Memorypro
+### How to Edit / Customize
+- **Backend API:** Edit `backend/app.py` to change endpoints, AI prompts, and persistence logic.
+- **Front-end UI:** Update `backend/static/index.html`, `backend/static/example.js`, and `backend/static/example.css`.
+- **Data defaults:** Modify `backend/data/default_deck.json` for seed decks.
+- **Desktop wrapper:** Adjust `run.py` for window sizing or update flow.
 
-### As a jQuery plugin
+### Troubleshooting
+1. **`OPENAI_API_KEY is not set` error:** Export the variable or add it to `.env` before starting `backend/app.py`.
+2. **Port 5000 already in use:** Stop the other process or change the port in `backend/app.py` and `run.py`.
+3. **Google Books requests failing:** Confirm internet access; the API can return 502 errors when unavailable.
+4. **Document upload fails:** Ensure the file is a supported format (.pdf, .docx, .txt) and not empty.
+5. **Deck doesn’t load:** Verify `backend/data/default_deck.json` exists; the backend refuses to start without it.
+6. **Desktop window doesn’t open:** Install `pywebview` and ensure Tkinter is available in your Python distribution.
 
-If you'd like to quickly get running with Memorypro, you can simply create a `<ul>` with the right CSS classes and Memorypro will take care of the rest.
+## Roadmap
+Suggested improvements (not yet implemented):
+1. Add a test suite for API endpoints and front-end workflows.
+2. Provide a Dockerfile for consistent local setup.
+3. Add a dedicated build script for PyInstaller packaging.
+4. Add authentication for multi-user deployments.
+5. Add structured logging and error monitoring.
+6. Add an export feature for generated decks (CSV/Anki).
+7. Add a basic role-based admin panel for managing decks.
+8. Improve offline support and caching for the UI.
 
-Requirements:
-
-- A div containing a `<ul>` where you'll create your questions and answers. In the example below this is `<div id='flashcards'>`.
-- `<li>` elements holding 2 divs. One for the question (with a class of `question`) and one for the answer (with a class of `answer`).
-- A div with an id of `current-question`, to show the question.
-- A div with an id of `current-answer`, to show the answer.
-- A link with an id of `show-answer`, to reveal the answer (by default you'll only see the question at first).
-- A link with an id of `correct`, which a user will click if they get the question right.
-- A link with an id of `wrong`, which a user will click if they get the question wrong.
-
-Here's some example code ([also available here](http://carlsednaoui.github.io/ouicards/live-examples/ouicards-jquery-example.html)):
-
-```html
-<html>
-<head>
-  <title>Welcome</title>
-  <script src="https://ajax.googleapis.org/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
-  <script src="../ouicards.js"></script>
-  <script>
-    $(function() {
-      $('#flashcards').ouicards();
-    });
-  </script>
-</head>
-
-<body>
-  <h1>Memorypro jQuery!</h1>
-  <div id='flashcards'>
-    <div id='current-question'></div>
-    <div id='current-answer'></div>
-    <ul>
-      <li>
-        <div class='question'>Question 1</div>
-        <div class='answer'>Answer 1</div>
-      </li>
-      <li>
-        <div class='question'>Question 2</div>
-        <div class='answer'>Answer 2</div>
-      </li>
-      <li>
-        <div class='question'>Question 3</div>
-        <div class='answer'>Answer 3</div>
-      </li>
-    </ul>
-    <a id='show-answer' href='#'>Show answer</a>
-    <a id="correct" href="#">Correct</a>
-    <a id="wrong" href="#">Wrong</a>
-  </div>
-</body>
-</html>
-```
-
-### As a JavaScript Library
-
-Welcome to the big leagues! The first thing you'll need is an array of Question/Answer objects.
-
-Example:
-
-```javascript
-var flashcards = [
-  {question: "Who built this?", answer: "Carl Sednaoui"},
-  {question: "Where was Memorypro made?", answer: "In NYC, during Hacker School"}
-];
-```
-
-You can then use the functions outlined below.
-
-#### Functions Available
-
-```
-ouicards.loadFromArray(flashcardArray)
-  // [{question: q1, answer: a1}, {question: q2, answer: a2}]
-ouicards.loadFromBrowser(jQuerySelector, Delimiter)
-  // Your delimiter will most likely be ',' or '\t'
-ouicards.getFromLS()
-  // Get the questions and buckets from localStorage
-ouicards.correct()
-  // Call this when the current question was answered correctly
-ouicards.wrong()
-  // Call this when the current question was answered incorrectly
-ouicards.next()
-  // Call this to receive a new Question/ Answer object
-```
-
-#### Everything You Have Access To
-
-```
-ouicards.currentBucket: The bucket from which the current card is being pulled.
-ouicards.flashcards: Your array of flashcards.
-ouicards.bucketA: All questions available in Bucket A.
-ouicards.bucketB: All questions available in Bucket B.
-ouicards.bucketC: All questions available in Bucket C.
-ouicards.counter: A running counter. Used to know which bucket to get the next question from.
-
-ouicards.loadFromBrowser(selector, delimiter)
-  // Uses jQuery to load the value of a given selector.
-  // This saves the questions into ouicards, localStorage AND
-  // returns an object with Flashcards, Bucket A, B and C.
-ouicards.loadFromArray(array)
-  // Loads the array of questions provided into ouicards and localStorage.
-ouicards.getQuestion(bucket)
-  // Gets a question for a given bucket and returns the built question HTML for it.
-ouicards.buildQuestionHTML(rawQuestion)
-  // Returns a question/ answer HTML object {question: questionEl, answer: answerEl}.
-ouicards.moveQuestion(fromBucket, toBucket)
-  // Moves a question from a given bucket to another given bucket.
-
-ouicards.next()
-  // Returns a new question/ answer object.
-ouicards.correct()
-  // Moves the current question to the next appropriate bucket.
-ouicards.wrong()
-  // Moves the current question to Bucket A.
-ouicards.saveToLS()
-  // Saves your flashcards, Bucket A, Bucket B and Bucket C to localStorage.
-ouicards.getFromLS()
-  // Gets your flashcards, Bucket A, Bucket B and Bucket C from localStorage.
-  // This also sets ouicards.currentBucket and ouicards.counter.
-ouicards.resetBuckets()
-  // Resets ouicards buckets.
-  // Bucket A will equal your flashcards array. Bucket B and C will be empty arrays.
-  // Your currentBucket will also be empty and all of this will get saved to localStorage.
-```
-
-## Contact
-Have feedback or suggestions? We'd love to hear from you. File an issue here or reach out to the original creator, [Carl Sednaoui](https://twitter.com/carlsednaoui), whose work powers this Memorypro fork.
+## Contributing
+- Open issues for bugs or feature requests.
+- Fork the repo and submit a PR with a clear description of changes.
+- No formal linting or formatting rules are enforced; follow the existing style.
+- If you introduce new dependencies, document them in the README and `backend/requirements.txt`.
 
 ## License
-[MIT](http://opensource.org/licenses/MIT)
+No license file detected.
 
-## Completed while attending [Hacker School](https://www.hackerschool.com/)
+## Acknowledgements / Credits
+### Upstream / Credits
+- OuiCards, the original spaced-repetition engine and inspiration for the UI.
+
+### Additional Credits
+- OpenAI, Google Books, Flask, and PyWebView for powering AI, search, and desktop features.
+
+## Donate / Support
+If you find Memorypro useful, donations help cover maintenance, infrastructure, and future feature development.
+
+- GitHub Sponsors: <link>
+- Buy Me a Coffee: <link>
+- PayPal: <link>
+- Crypto (optional): <address>
+
+Thank you for supporting the project!
