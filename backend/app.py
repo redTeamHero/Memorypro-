@@ -9,6 +9,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
+import httpx
 import requests
 from docx import Document
 from dotenv import load_dotenv
@@ -572,7 +573,8 @@ def get_openai_client() -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY") or OPENAI_API_KEY
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not set in the current environment.")
-    return OpenAI(api_key=api_key)
+    http_client = httpx.Client(timeout=httpx.Timeout(30.0))
+    return OpenAI(api_key=api_key, http_client=http_client)
 
 
 def call_openai_flashcards(chunks: Sequence[str], source: str) -> List[Dict[str, Any]]:
