@@ -2,6 +2,7 @@ import json
 import os
 import re
 import sys
+import traceback
 from collections import Counter
 from datetime import datetime
 from io import BytesIO
@@ -563,8 +564,19 @@ def _extract_json_object(text: str) -> Optional[Any]:
     return None
 
 
+def is_openai_key_present() -> bool:
+    return bool(os.getenv("OPENAI_API_KEY") or OPENAI_API_KEY)
+
+
+def get_openai_client() -> OpenAI:
+    api_key = os.getenv("OPENAI_API_KEY") or OPENAI_API_KEY
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set in the current environment.")
+    return OpenAI(api_key=api_key)
+
+
 def call_openai_flashcards(chunks: Sequence[str], source: str) -> List[Dict[str, Any]]:
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    client = get_openai_client()
     flashcards: List[Dict[str, Any]] = []
 
     for chunk in chunks:
@@ -685,7 +697,7 @@ def call_openai_topic_flashcards(
         normalized_difficulty = DEFAULT_TOPIC_DIFFICULTY
 
     prompt = build_topic_flashcard_prompt(topic, normalized_difficulty, target_count)
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    client = get_openai_client()
     response = client.chat.completions.create(
         model=DEFAULT_MODEL,
         messages=[{"role": "user", "content": prompt}],
@@ -896,8 +908,18 @@ def create_topic_flashcards() -> Any:
         generated = call_openai_topic_flashcards(topic, difficulty, count)
     except Exception as exc:  # pragma: no cover - depends on network/API
         app.logger.exception("Topic flashcard generation failed")
-        print("🔥 GENERATION ERROR:", exc)
-        return jsonify({"error": str(exc)}), 502
+        traceback.print_exc()
+        return (
+            jsonify(
+                {
+                    "error": "GenerationFailed",
+                    "message": "Topic flashcard generation failed.",
+                    "detail": str(exc),
+                    "openaiKeyPresent": is_openai_key_present(),
+                }
+            ),
+            500,
+        )
 
     return jsonify(generated)
 
@@ -955,8 +977,18 @@ def upload_document() -> Any:
         flashcards = call_openai_flashcards(chunks, file.filename or "document")
     except Exception as exc:  # pragma: no cover - depends on network/API
         app.logger.exception("Flashcard generation failed")
-        print("🔥 GENERATION ERROR:", exc)
-        return jsonify({"error": str(exc)}), 502
+        traceback.print_exc()
+        return (
+            jsonify(
+                {
+                    "error": "GenerationFailed",
+                    "message": "Document flashcard generation failed.",
+                    "detail": str(exc),
+                    "openaiKeyPresent": is_openai_key_present(),
+                }
+            ),
+            500,
+        )
 
     return jsonify(
         {
