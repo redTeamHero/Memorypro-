@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import requests
 from docx import Document
+from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from openai import OpenAI
@@ -27,6 +28,12 @@ DATA_DIR = BASE_DIR / "data"
 DEFAULT_DECK_FILE = DATA_DIR / "default_deck.json"
 PROGRESS_FILE = DATA_DIR / "progress.json"
 APP_VERSION = "1.0.0"
+load_dotenv()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise RuntimeError("OPENAI_API_KEY is not set. Please set it before running MemoryPro.")
+
 DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 MAX_CHARS_PER_CHUNK = 5500
 MAX_FLASHCARDS_PER_CHUNK = 20
@@ -557,11 +564,7 @@ def _extract_json_object(text: str) -> Optional[Any]:
 
 
 def call_openai_flashcards(chunks: Sequence[str], source: str) -> List[Dict[str, Any]]:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured.")
-
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=OPENAI_API_KEY)
     flashcards: List[Dict[str, Any]] = []
 
     for chunk in chunks:
@@ -676,16 +679,13 @@ def parse_topic_flashcard_response(
 def call_openai_topic_flashcards(
     topic: str, difficulty: str, target_count: Optional[int] = None
 ) -> Dict[str, Any]:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is not configured.")
 
     normalized_difficulty = (difficulty or DEFAULT_TOPIC_DIFFICULTY).lower()
     if normalized_difficulty not in TOPIC_DIFFICULTIES:
         normalized_difficulty = DEFAULT_TOPIC_DIFFICULTY
 
     prompt = build_topic_flashcard_prompt(topic, normalized_difficulty, target_count)
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=OPENAI_API_KEY)
     response = client.chat.completions.create(
         model=DEFAULT_MODEL,
         messages=[{"role": "user", "content": prompt}],
@@ -896,15 +896,8 @@ def create_topic_flashcards() -> Any:
         generated = call_openai_topic_flashcards(topic, difficulty, count)
     except Exception as exc:  # pragma: no cover - depends on network/API
         app.logger.exception("Topic flashcard generation failed")
-        return (
-            jsonify(
-                {
-                    "error": "GenerationFailed",
-                    "message": "Flashcard generation is unavailable right now.",
-                }
-            ),
-            502,
-        )
+        print("🔥 GENERATION ERROR:", exc)
+        return jsonify({"error": str(exc)}), 502
 
     return jsonify(generated)
 
@@ -962,10 +955,8 @@ def upload_document() -> Any:
         flashcards = call_openai_flashcards(chunks, file.filename or "document")
     except Exception as exc:  # pragma: no cover - depends on network/API
         app.logger.exception("Flashcard generation failed")
-        return (
-            jsonify({"error": "GenerationFailed", "message": "Flashcard generation is unavailable right now."}),
-            502,
-        )
+        print("🔥 GENERATION ERROR:", exc)
+        return jsonify({"error": str(exc)}), 502
 
     return jsonify(
         {
