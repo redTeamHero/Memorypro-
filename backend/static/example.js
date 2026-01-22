@@ -30,6 +30,14 @@ var topicGenerationState = {
   count: DEFAULT_TOPIC_CARD_COUNT,
 };
 
+var updateState = {
+  installType: null,
+  updateAvailable: false,
+  updateReady: false,
+  latestVersion: null,
+  releaseNotesUrl: null,
+};
+
 var domRefs = {
   uploadLabel: null,
   questionsInput: null,
@@ -79,6 +87,14 @@ var domRefs = {
   topicCountButtons: null,
   topicFlashcardPreview: null,
   topicStatus: null,
+  updateCurrentVersion: null,
+  updateInstallType: null,
+  updateStatus: null,
+  updateStatusMessage: null,
+  checkUpdateButton: null,
+  downloadUpdateButton: null,
+  applyUpdateButton: null,
+  releaseNotesLink: null,
 };
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -116,8 +132,148 @@ async function apiFetch(path, options) {
   return response;
 }
 
+function initializeUpdatePanel() {
+  if (!domRefs.checkUpdateButton) {
+    return;
+  }
+
+  attachActivate(domRefs.checkUpdateButton, handleCheckUpdates);
+  attachActivate(domRefs.downloadUpdateButton, handleDownloadUpdate);
+  attachActivate(domRefs.applyUpdateButton, handleApplyUpdate);
+  refreshUpdateStatus();
+}
+
+function setUpdateStatusMessage(message, isError) {
+  if (!domRefs.updateStatusMessage) {
+    return;
+  }
+
+  domRefs.updateStatusMessage.textContent = message || '';
+  if (isError) {
+    domRefs.updateStatusMessage.classList.add('json-status-error');
+  } else {
+    domRefs.updateStatusMessage.classList.remove('json-status-error');
+  }
+}
+
+function updateUpdatePanelState(payload) {
+  if (payload && typeof payload.installType === 'string') {
+    updateState.installType = payload.installType;
+  }
+  if (payload && typeof payload.updateReady === 'boolean') {
+    updateState.updateReady = payload.updateReady;
+  }
+  if (payload && typeof payload.updateAvailable === 'boolean') {
+    updateState.updateAvailable = payload.updateAvailable;
+  }
+  if (payload && payload.latestVersion) {
+    updateState.latestVersion = payload.latestVersion;
+  }
+  if (payload && payload.releaseNotesUrl) {
+    updateState.releaseNotesUrl = payload.releaseNotesUrl;
+  }
+
+  if (domRefs.updateCurrentVersion && payload && payload.currentVersion) {
+    domRefs.updateCurrentVersion.textContent = payload.currentVersion;
+  }
+  if (domRefs.updateInstallType && updateState.installType) {
+    domRefs.updateInstallType.textContent = updateState.installType === 'source' ? 'Source / Git' : 'Packaged EXE';
+  }
+  if (domRefs.updateStatus) {
+    if (updateState.updateReady) {
+      domRefs.updateStatus.textContent = 'Ready to apply';
+    } else if (updateState.updateAvailable) {
+      domRefs.updateStatus.textContent = 'Update available';
+    } else {
+      domRefs.updateStatus.textContent = 'Up to date';
+    }
+  }
+
+  if (domRefs.releaseNotesLink) {
+    if (updateState.releaseNotesUrl) {
+      domRefs.releaseNotesLink.href = updateState.releaseNotesUrl;
+      domRefs.releaseNotesLink.style.display = 'inline-flex';
+    } else {
+      domRefs.releaseNotesLink.href = '#';
+      domRefs.releaseNotesLink.style.display = 'none';
+    }
+  }
+
+  setButtonDisabled(domRefs.downloadUpdateButton, !updateState.updateAvailable);
+  setButtonDisabled(domRefs.applyUpdateButton, !updateState.updateReady);
+}
+
+async function refreshUpdateStatus() {
+  try {
+    var response = await apiFetch('/api/update/status');
+    var payload = await response.json();
+    updateUpdatePanelState(payload);
+  } catch (error) {
+    setUpdateStatusMessage(error.message, true);
+  }
+}
+
+async function handleCheckUpdates() {
+  setUpdateStatusMessage('Checking for updates…', false);
+  setButtonDisabled(domRefs.checkUpdateButton, true);
+  try {
+    var response = await apiFetch('/api/update/check');
+    var payload = await response.json();
+    updateUpdatePanelState(payload);
+    if (payload.blocked) {
+      setUpdateStatusMessage(payload.message, true);
+      return;
+    }
+    if (payload.updateAvailable) {
+      setUpdateStatusMessage(
+        'Update available' + (payload.latestVersion ? ' (' + payload.latestVersion + ')' : '') + '.',
+        false
+      );
+    } else {
+      setUpdateStatusMessage(payload.message || 'You are up to date.', false);
+    }
+  } catch (error) {
+    setUpdateStatusMessage(error.message, true);
+  } finally {
+    setButtonDisabled(domRefs.checkUpdateButton, false);
+  }
+}
+
+async function handleDownloadUpdate() {
+  setUpdateStatusMessage('Downloading update…', false);
+  setButtonDisabled(domRefs.downloadUpdateButton, true);
+  try {
+    var response = await apiFetch('/api/update/download', { method: 'POST' });
+    var payload = await response.json();
+    updateUpdatePanelState({
+      installType: payload.installType,
+      updateAvailable: false,
+      updateReady: !!payload.requiresRestart,
+    });
+    setUpdateStatusMessage(payload.message || 'Update downloaded.', false);
+  } catch (error) {
+    setUpdateStatusMessage(error.message, true);
+  } finally {
+    setButtonDisabled(domRefs.downloadUpdateButton, !updateState.updateAvailable);
+  }
+}
+
+async function handleApplyUpdate() {
+  setUpdateStatusMessage('Restarting to apply update…', false);
+  setButtonDisabled(domRefs.applyUpdateButton, true);
+  try {
+    var response = await apiFetch('/api/update/apply', { method: 'POST' });
+    var payload = await response.json();
+    setUpdateStatusMessage(payload.message || 'Applying update.', false);
+  } catch (error) {
+    setUpdateStatusMessage(error.message, true);
+    setButtonDisabled(domRefs.applyUpdateButton, !updateState.updateReady);
+  }
+}
+
 async function initializeApp() {
   cacheDom();
+  initializeUpdatePanel();
   initializeTopicDifficultyUI();
   initializeSets();
   await ensureDeckLoaded();
@@ -181,6 +337,14 @@ function cacheDom() {
   domRefs.topicCountButtons = document.querySelectorAll('.count-button');
   domRefs.topicFlashcardPreview = document.getElementById('topic-flashcard-preview');
   domRefs.topicStatus = document.getElementById('topic-status');
+  domRefs.updateCurrentVersion = document.getElementById('update-current-version');
+  domRefs.updateInstallType = document.getElementById('update-install-type');
+  domRefs.updateStatus = document.getElementById('update-status');
+  domRefs.updateStatusMessage = document.getElementById('update-status-message');
+  domRefs.checkUpdateButton = document.getElementById('check-update-button');
+  domRefs.downloadUpdateButton = document.getElementById('download-update-button');
+  domRefs.applyUpdateButton = document.getElementById('apply-update-button');
+  domRefs.releaseNotesLink = document.getElementById('release-notes-link');
 }
 
 function initializeSets() {

@@ -107,6 +107,61 @@ body {
   font-size: 0.95rem;
 }
 
+.update-panel {
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.update-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.update-meta {
+  display: grid;
+  gap: 10px;
+}
+
+.update-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.meta-label {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.meta-value {
+  font-weight: 600;
+}
+
+.update-actions {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.text-link {
+  font-size: 0.9rem;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.text-link:hover,
+.text-link:focus {
+  text-decoration: underline;
+}
+
 .upload-actions {
   display: grid;
   gap: 14px;
@@ -862,5 +917,9 @@ body {
 
   .control-button {
     width: 100%;
+  }
+
+  .update-grid {
+    grid-template-columns: 1fr;
   }
 }

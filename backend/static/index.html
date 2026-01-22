@@ -258,6 +258,37 @@
         </section>
 
 
+        <section class="card-section update-panel" aria-label="Auto-update system">
+          <header class="section-heading">
+            <h2>Auto-update system</h2>
+            <p class="section-sub">Keep MemoryPro current with the latest improvements.</p>
+          </header>
+          <div class="update-grid">
+            <div class="update-meta">
+              <div class="update-row">
+                <span class="meta-label">Current version</span>
+                <span id="update-current-version" class="meta-value">--</span>
+              </div>
+              <div class="update-row">
+                <span class="meta-label">Install type</span>
+                <span id="update-install-type" class="meta-value">--</span>
+              </div>
+              <div class="update-row">
+                <span class="meta-label">Status</span>
+                <span id="update-status" class="meta-value">Idle</span>
+              </div>
+            </div>
+            <div class="update-actions" role="group" aria-label="Update actions">
+              <button id="check-update-button" type="button" class="secondary-button">Check for updates</button>
+              <button id="download-update-button" type="button" class="primary-button" disabled>Download update</button>
+              <button id="apply-update-button" type="button" class="secondary-button" disabled>Restart to apply</button>
+              <a id="release-notes-link" class="text-link" href="#" target="_blank" rel="noopener noreferrer">View release notes</a>
+            </div>
+          </div>
+          <p id="update-status-message" class="helper-text" aria-live="polite"></p>
+        </section>
+
+
         <section class="card-section question" role="button" tabindex="0" aria-label="Study question">
           <header class="card-meta">
             <span class="pill accent">Prompt</span>

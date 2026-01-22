@@ -6,11 +6,8 @@ import time
 import json
 
 import webview
-import tkinter as tk
-import tkinter.messagebox as mb
 
-from backend.app import APP_VERSION, app, write_json
-from backend.updater import check_for_update, download_and_install
+from backend.app import app, write_json
 
 HOST = "127.0.0.1"
 PORT = 5000
@@ -82,18 +79,6 @@ if __name__ == "__main__":
     os.chdir(BASE_DIR)
 
     ensure_data_files()
-
-    update = check_for_update(APP_VERSION)
-    if update:
-        root = tk.Tk()
-        root.withdraw()
-        should_update = mb.askyesno(
-            "Update Available",
-            f"Version {update['version']} is available.\n\n{update.get('notes', '')}\n\nUpdate now?",
-        )
-        root.destroy()
-        if should_update:
-            download_and_install(update["installer_url"])
 
     server_thread = threading.Thread(target=start_server)
     server_thread.start()
