@@ -2,6 +2,8 @@ import json
 import os
 import re
 import sys
+import threading
+import time
 import traceback
 from collections import Counter
 from datetime import datetime
@@ -18,6 +20,8 @@ from flask_cors import CORS
 from openai import OpenAI
 from pypdf import PdfReader
 from pptx import Presentation
+
+from updater import UpdateError, apply_update, check_for_update, download_update, get_update_status
 
 def resolve_base_dir() -> Path:
     base_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -767,6 +771,59 @@ def health_check() -> Any:
 @app.route("/api/version", methods=["GET"])
 def version() -> Any:
     return jsonify({"version": APP_VERSION})
+
+
+@app.route("/api/update/status", methods=["GET"])
+def update_status() -> Any:
+    return jsonify(get_update_status(APP_VERSION, BASE_DIR))
+
+
+@app.route("/api/update/check", methods=["GET"])
+def update_check() -> Any:
+    try:
+        payload = check_for_update(APP_VERSION, BASE_DIR)
+        payload["currentVersion"] = APP_VERSION
+        return jsonify(payload)
+    except UpdateError as exc:
+        return jsonify({"error": "UpdateError", "message": str(exc)}), 400
+    except requests.RequestException:  # pragma: no cover - network failure handling
+        return (
+            jsonify(
+                {"error": "UpdateFailed", "message": "Unable to reach the update service."}
+            ),
+            502,
+        )
+
+
+@app.route("/api/update/download", methods=["POST"])
+def update_download() -> Any:
+    try:
+        payload = download_update(APP_VERSION, BASE_DIR)
+        return jsonify(payload)
+    except UpdateError as exc:
+        return jsonify({"error": "UpdateError", "message": str(exc)}), 400
+    except requests.RequestException:  # pragma: no cover - network failure handling
+        return (
+            jsonify(
+                {"error": "UpdateFailed", "message": "Unable to download the update."}
+            ),
+            502,
+        )
+
+
+@app.route("/api/update/apply", methods=["POST"])
+def update_apply() -> Any:
+    try:
+        payload = apply_update(BASE_DIR)
+    except UpdateError as exc:
+        return jsonify({"error": "UpdateError", "message": str(exc)}), 400
+
+    def shutdown() -> None:
+        time.sleep(0.75)
+        os._exit(0)
+
+    threading.Thread(target=shutdown, daemon=True).start()
+    return jsonify(payload)
 
 
 @app.route("/api/textbooks/search", methods=["GET"])
