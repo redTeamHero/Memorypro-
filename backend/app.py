@@ -17,6 +17,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from openai import OpenAI
 from pypdf import PdfReader
+from pptx import Presentation
 
 def resolve_base_dir() -> Path:
     base_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -399,6 +400,18 @@ def extract_text_from_file(file: Any) -> str:
         buffer = BytesIO(file.read())
         document = Document(buffer)
         return "\n".join(paragraph.text for paragraph in document.paragraphs)
+
+    if lower_name.endswith(".pptx"):
+        file.stream.seek(0)
+        presentation = Presentation(BytesIO(file.read()))
+        text_runs: List[str] = []
+        for slide in presentation.slides:
+            for shape in slide.shapes:
+                if hasattr(shape, "text"):
+                    text = normalize_text(shape.text)
+                    if text:
+                        text_runs.append(text)
+        return "\n".join(text_runs)
 
     file.stream.seek(0)
     return file.read().decode("utf-8", errors="ignore")
