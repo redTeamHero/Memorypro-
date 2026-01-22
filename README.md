@@ -21,7 +21,7 @@ Key capabilities:
 - CSV/JSON paste import for bulk deck creation.
 - Topic-based flashcard generation with configurable difficulty and card count.
 - Google Books search + chapter outline workflow for textbook-based cards.
-- Document upload (PDF/DOCX/TXT) to generate flashcards from source text.
+- Document upload (PDF/DOCX/PPTX/TXT) to generate flashcards from source text.
 - Progress tracking endpoint that stores session snapshots.
 - Desktop app launcher using a Flask server plus `pywebview`.
 
@@ -119,7 +119,7 @@ No automated tests or linting scripts are included in the repository.
 1. **`OPENAI_API_KEY is not set` error:** Export the variable or add it to `.env` before starting `backend/app.py`.
 2. **Port 5000 already in use:** Stop the other process or change the port in `backend/app.py` and `run.py`.
 3. **Google Books requests failing:** Confirm internet access; the API can return 502 errors when unavailable.
-4. **Document upload fails:** Ensure the file is a supported format (.pdf, .docx, .txt) and not empty.
+4. **Document upload fails:** Ensure the file is a supported format (.pdf, .docx, .pptx, .txt) and not empty.
 5. **Deck doesn’t load:** Verify `backend/data/default_deck.json` exists; the backend refuses to start without it.
 6. **Desktop window doesn’t open:** Install `pywebview` and ensure Tkinter is available in your Python distribution.
 
